@@ -1,0 +1,130 @@
+services:
+  # Simple Flask web application
+  webapp:
+    build: ./webapp
+    container_name: metrics-webapp
+    labels:
+      com.docker.compose.project: "predictive-autoscaling"
+      com.docker.compose.service: "webapp"
+      monitoring.type: "application"
+      monitoring.name: "webapp"  # ← This will show in metrics
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=postgresql://metrics:password@db:5432/metricsdb
+      - REDIS_URL=redis://cache:6379
+    depends_on:
+      - db
+      - cache
+    networks:
+      - metrics-net
+    restart: unless-stopped
+
+  # PostgreSQL database
+  db:
+    image: postgres:15-alpine
+    container_name: metrics-db
+    labels:
+      com.docker.compose.project: "predictive-autoscaling"
+      com.docker.compose.service: "db"
+      monitoring.type: "database"
+      monitoring.name: "postgres"
+    environment:
+      POSTGRES_USER: metrics
+      POSTGRES_PASSWORD: password # Change this
+      POSTGRES_DB: metricsdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - metrics-net
+    restart: unless-stopped
+
+  # Redis cache
+  cache:
+    image: redis:7-alpine
+    container_name: metrics-cache
+    labels:
+      com.docker.compose.project: "predictive-autoscaling"
+      com.docker.compose.service: "cache"
+      monitoring.type: "cache"
+      monitoring.name: "redis"
+    networks:
+      - metrics-net
+    restart: unless-stopped
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: metrics-prometheus
+    labels:
+      com.docker.compose.project: "predictive-autoscaling"
+      com.docker.compose.service: "prometheus"
+      monitoring.type: "monitoring"
+      monitoring.name: "prometheus"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - metrics-net
+    restart: unless-stopped
+
+  # cAdvisor for container metrics
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: metrics-cadvisor
+    labels:
+      com.docker.compose.project: "predictive-autoscaling"
+      com.docker.compose.service: "cadvisor"
+      monitoring.type: "monitoring"
+      monitoring.name: "cadvisor"
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "8080:8080"
+    networks:
+      - metrics-net
+    restart: unless-stopped
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: metrics-grafana
+    labels:
+      com.docker.compose.project: "predictive-autoscaling"
+      com.docker.compose.service: "grafana"
+      monitoring.type: "monitoring"
+      monitoring.name: "grafana"
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_INSTALL_PLUGINS=
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana-provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    networks:
+      - metrics-net
+    restart: unless-stopped
+
+networks:
+  metrics-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  prometheus_data:
+  grafana_data:

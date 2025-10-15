@@ -33,15 +33,14 @@ def export_metrics_simple(seconds=900, output_dir='../data/raw'):
     print(f"   To:   {end_time}")
     print(f"   Duration: {seconds} seconds\n")
     
-    # Simple queries that should work
+    # Queries that include container name and other useful labels
     queries = {
-        'container_cpu': 'rate(container_cpu_usage_seconds_total[1m])',
-        'container_memory': 'container_memory_usage_bytes',
-        'container_network_rx': 'rate(container_network_receive_bytes_total[1m])',
-        'container_network_tx': 'rate(container_network_transmit_bytes_total[1m])',
+        'container_cpu': 'rate(container_cpu_usage_seconds_total{name!=""}[1m])',
+        'container_memory': 'container_memory_usage_bytes{name!=""}',
+        'container_network_rx': 'rate(container_network_receive_bytes_total{name!=""}[1m])',
+        'container_network_tx': 'rate(container_network_transmit_bytes_total{name!=""}[1m])',
         'http_requests': 'rate(http_requests_total[1m])',
-        'container_cpu_usage_seconds_total': 'rate(container_cpu_usage_seconds_total[1m])',
-        'http_request_duration_seconds_bucket': 'rate(http_request_duration_seconds_bucket[1m])',
+        'http_request_duration': 'rate(http_request_duration_seconds_bucket[1m])',
         
     }
     

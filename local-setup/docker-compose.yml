@@ -120,6 +120,26 @@ services:
       - metrics-net
     restart: unless-stopped
 
+  # Load generator for continuous baseline traffic
+  load-generator:
+    build:
+      context: .
+      dockerfile: load_generator.Dockerfile
+    container_name: metrics-load-generator
+    labels:
+      com.docker.compose.project: "predictive-autoscaling"
+      com.docker.compose.service: "load-generator"
+      monitoring.type: "testing"
+      monitoring.name: "load-generator"
+    command: ["python", "load_generator.py", "baseline", "--duration", "86400"]
+    depends_on:
+      - webapp
+    networks:
+      - metrics-net
+    restart: unless-stopped
+    environment:
+      - WEBAPP_URL=http://webapp:5000
+
 networks:
   metrics-net:
     driver: bridge

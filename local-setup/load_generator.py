@@ -4,12 +4,16 @@ import time
 import random
 from concurrent.futures import ThreadPoolExecutor
 import argparse
+import os
+
+# Get base URL from environment or default to localhost
+BASE_URL = os.getenv('WEBAPP_URL', 'http://localhost:5000')
 
 ENDPOINTS = {
-    'light': 'http://localhost:5000/light',
-    'medium': 'http://localhost:5000/medium',
-    'heavy': 'http://localhost:5000/heavy',
-    'error': 'http://localhost:5000/error'
+    'light': f'{BASE_URL}/light',
+    'medium': f'{BASE_URL}/medium',
+    'heavy': f'{BASE_URL}/heavy',
+    'error': f'{BASE_URL}/error'
 }
 
 def make_request(endpoint):
@@ -17,12 +21,16 @@ def make_request(endpoint):
     try:
         response = requests.get(ENDPOINTS[endpoint], timeout=5)
         return response.status_code
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed for {endpoint}: {e}")
+        return 0
     except Exception as e:
+        print(f"Unexpected error for {endpoint}: {e}")
         return 0
 
 def baseline_load(duration_seconds=3600, rps=10):
     """Steady baseline traffic"""
-    print(f"Running baseline load: {rps} req/s for {duration_seconds}s")
+    print(f"Running baseline load: {rps} req/s for {duration_seconds}s targeting {BASE_URL}")
     
     end_time = time.time() + duration_seconds
     with ThreadPoolExecutor(max_workers=20) as executor:

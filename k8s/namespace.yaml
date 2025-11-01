@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: predictive-autoscaling
+  labels:
+    app: predictive-autoscaling
+    environment: production

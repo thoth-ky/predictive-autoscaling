@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load-generator
+  namespace: predictive-autoscaling
+  labels:
+    app: load-generator
+    monitoring.type: testing
+    monitoring.name: load-generator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: load-generator
+  template:
+    metadata:
+      labels:
+        app: load-generator
+        monitoring.type: testing
+        monitoring.name: load-generator
+    spec:
+      containers:
+        - name: load-generator
+          image: load-generator:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            ["python", "load_generator.py", "baseline", "--duration", "86400"]
+          env:
+            - name: WEBAPP_URL
+              value: "http://webapp:5000"
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"

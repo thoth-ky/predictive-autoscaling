@@ -7,13 +7,28 @@ scrape_configs:
   - job_name: 'webapp'
     static_configs:
       - targets: ['webapp:5000']
+    scrape_interval: 15s
+    metrics_path: /metrics
 
   # Scrape cAdvisor for container metrics
   - job_name: 'cadvisor'
     static_configs:
       - targets: ['cadvisor:8080']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    # Keep all container labels for better identification (Podman Compose)
+    metric_relabel_configs:
+      - source_labels: [container_label_podman_compose_service]
+        target_label: compose_service
+      - source_labels: [container_label_monitoring_name]
+        target_label: service_name
+      - source_labels: [container_label_monitoring_type]
+        target_label: service_type
+      - source_labels: [container_label_podman_compose_project]
+        target_label: compose_project
 
   # Scrape Prometheus itself
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
+    scrape_interval: 15s

@@ -6,11 +6,17 @@ terraform {
     }
     
   }
-  backend "s3" {
-    bucket = "mlops-tf-state-bucket"
-  }
+
+  backend "local" {}
 }
 
+variable "aws" {
+  description = "AWS configuration"
+  type = object({
+    region  = string
+    profile = string
+  })
+}
 
 provider "aws" {
   region  = var.aws.region

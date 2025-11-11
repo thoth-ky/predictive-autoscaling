@@ -4,8 +4,8 @@ services:
     build: ./webapp
     container_name: metrics-webapp
     labels:
-      com.docker.compose.project: "predictive-autoscaling"
-      com.docker.compose.service: "webapp"
+      podman.compose.project: "predictive-autoscaling"
+      podman.compose.service: "webapp"
       monitoring.type: "application"
       monitoring.name: "webapp"  # ← This will show in metrics
     ports:
@@ -25,8 +25,8 @@ services:
     image: postgres:15-alpine
     container_name: metrics-db
     labels:
-      com.docker.compose.project: "predictive-autoscaling"
-      com.docker.compose.service: "db"
+      podman.compose.project: "predictive-autoscaling"
+      podman.compose.service: "db"
       monitoring.type: "database"
       monitoring.name: "postgres"
     environment:
@@ -44,8 +44,8 @@ services:
     image: redis:7-alpine
     container_name: metrics-cache
     labels:
-      com.docker.compose.project: "predictive-autoscaling"
-      com.docker.compose.service: "cache"
+      podman.compose.project: "predictive-autoscaling"
+      podman.compose.service: "cache"
       monitoring.type: "cache"
       monitoring.name: "redis"
     networks:
@@ -57,8 +57,8 @@ services:
     image: prom/prometheus:latest
     container_name: metrics-prometheus
     labels:
-      com.docker.compose.project: "predictive-autoscaling"
-      com.docker.compose.service: "prometheus"
+      podman.compose.project: "predictive-autoscaling"
+      podman.compose.service: "prometheus"
       monitoring.type: "monitoring"
       monitoring.name: "prometheus"
     volumes:
@@ -78,8 +78,8 @@ services:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: metrics-cadvisor
     labels:
-      com.docker.compose.project: "predictive-autoscaling"
-      com.docker.compose.service: "cadvisor"
+      podman.compose.project: "predictive-autoscaling"
+      podman.compose.service: "cadvisor"
       monitoring.type: "monitoring"
       monitoring.name: "cadvisor"
     privileged: true
@@ -99,8 +99,8 @@ services:
     image: grafana/grafana:latest
     container_name: metrics-grafana
     labels:
-      com.docker.compose.project: "predictive-autoscaling"
-      com.docker.compose.service: "grafana"
+      podman.compose.project: "predictive-autoscaling"
+      podman.compose.service: "grafana"
       monitoring.type: "monitoring"
       monitoring.name: "grafana"
     ports:
@@ -127,8 +127,8 @@ services:
       dockerfile: load_generator.Dockerfile
     container_name: metrics-load-generator
     labels:
-      com.docker.compose.project: "predictive-autoscaling"
-      com.docker.compose.service: "load-generator"
+      podman.compose.project: "predictive-autoscaling"
+      podman.compose.service: "load-generator"
       monitoring.type: "testing"
       monitoring.name: "load-generator"
     command: ["python", "load_generator.py", "baseline", "--duration", "86400"]

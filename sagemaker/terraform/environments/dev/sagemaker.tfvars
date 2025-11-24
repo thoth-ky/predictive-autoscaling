@@ -1,6 +1,6 @@
 aws = {
-  region  = "us-east-1"  # Change to your preferred region
-  profile = "default"    # Change to your AWS profile name
+  region  = "us-east-1"
+  profile = "ck"
 }
 
 sagemaker = {

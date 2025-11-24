@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Kubernetes metrics export for container monitoring
-Exports container_cpu_rate metric for ALL Kubernetes containers
+Kubernetes metrics export for container monitoring via Prometheus
 """
 import json
 import requests
@@ -99,7 +98,7 @@ class KubernetesMetricsExporter:
         
         return ",".join([f"{k}={v}" for k, v in sorted(filtered_labels.items())])
 
-    def export_metrics(self, seconds=900, output_dir='./data/raw/metrics'):
+    def export_metrics(self, seconds=900, output_dir='./data/raw/metrics', all=False):
         """Export configurable metrics for ALL Kubernetes containers"""
         if not self.test_connection():
             return None
@@ -123,10 +122,11 @@ class KubernetesMetricsExporter:
         exported_files = []
         
         # Export each metric separately
-        for metric_name in self.metrics_to_export:
+        for metric_name in (self.metrics_to_export if not all else all_metrics):
             if metric_name not in self.metric_queries:
                 print(f"\n⚠️  Unknown metric '{metric_name}' - skipping")
                 continue
+                # TODO: Create on the fly queries for new metrics if needed
                 
             query = self.metric_queries[metric_name]
             print(f"\n📥 Fetching {metric_name} for ALL containers")
@@ -199,7 +199,7 @@ class KubernetesMetricsExporter:
                 os.makedirs(output_path, exist_ok=True)
                 
                 # Save to CSV with timestamp in filename
-                output_file = os.path.join(output_path, f'container_cpu_rate_{timestamp_str}.csv')
+                output_file = os.path.join(output_path, f'{metric_name}_{timestamp_str}.csv')
                 
                 # Write CSV
                 fieldnames = ['timestamp', 'container_labels', 'value', 'container_id']
@@ -223,7 +223,13 @@ class KubernetesMetricsExporter:
                 if unique_containers:
                     print("📊 Sample container labels:")
                     for i, labels in enumerate(sorted(unique_containers)[:5]):
-                        print(f"   {i+1}: {labels}")
+                        # Extract container name from labels string
+                        container_name = ""
+                        for label in labels.split(','):
+                            if label.startswith('container='):
+                                container_name = label
+                                break
+                        print(f"   {i+1}: {container_name}")
                     if len(unique_containers) > 5:
                         print(f"   ... and {len(unique_containers) - 5} more")
                 
@@ -235,23 +241,7 @@ class KubernetesMetricsExporter:
 
 def main():
     import argparse
-    
-    parser = argparse.ArgumentParser(description='Export configurable metrics from ALL Kubernetes containers via Prometheus')
-    parser.add_argument('--seconds', type=int, default=900, 
-                       help='Number of seconds to export (default: 900)')
-    parser.add_argument('--output', type=str, default='./data/raw/metrics',
-                       help='Output directory (default: ./data/raw/metrics)')
-    parser.add_argument('--prometheus-url', type=str, default='http://localhost:9090',
-                       help='Prometheus URL')
-    parser.add_argument('--metrics', type=str, nargs='+', 
-                       default=['container_cpu_rate'],
-                       help='Metrics to export (default: container_cpu_rate)')
-    
-    args = parser.parse_args()
-    
-    # Show available metrics
-    print("📋 Available metrics:")
-    available_metrics = [
+    default_metrics = [
         'container_cpu_rate',
         'container_memory_usage', 
         'container_memory_limit',
@@ -262,7 +252,24 @@ def main():
         'container_fs_read_bytes_rate',
         'container_fs_write_bytes_rate'
     ]
-    for metric in available_metrics:
+    
+    parser = argparse.ArgumentParser(description='Export configurable metrics from ALL Kubernetes containers via Prometheus')
+    parser.add_argument('--seconds', type=int, default=900, 
+                       help='Number of seconds to export (default: 900)')
+    parser.add_argument('--output', type=str, default='./data/raw/metrics',
+                       help='Output directory (default: ./data/raw/metrics)')
+    parser.add_argument('--prometheus-url', type=str, default='http://localhost:9090',
+                       help='Prometheus URL')
+    parser.add_argument('--metrics', type=str, nargs='+', 
+                       default=default_metrics,
+                       help='Metrics to export (default: container_cpu_rate)')
+    
+    args = parser.parse_args()
+    
+    # Show available metrics
+    print("📋 Available metrics:")
+    
+    for metric in default_metrics:
         status = "✅" if metric in args.metrics else "  "
         print(f"   {status} {metric}")
     

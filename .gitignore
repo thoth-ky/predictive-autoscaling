@@ -1,4 +1,4 @@
-data/raw/*
+data
 data/processed/*
 *.pyc
 __pycache__/

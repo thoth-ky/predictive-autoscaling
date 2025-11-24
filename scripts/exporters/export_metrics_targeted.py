@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Targeted metrics export for Docker Compose containers
-Focuses on specific containers: webapp, db, cache, prometheus, grafana
+Kubernetes metrics export for container monitoring
+Exports container_cpu_rate metric for ALL Kubernetes containers
 """
 import json
 import requests
@@ -11,17 +11,30 @@ import os
 import re
 
 
-class ContainerMetricsExporter:
-    def __init__(self, prometheus_url="http://localhost:9090"):
+class KubernetesMetricsExporter:
+    def __init__(self, prometheus_url="http://localhost:9090", metrics=None):
         self.prom_url = prometheus_url
-        self.target_containers = {
-            'webapp': ['metrics-webapp', 'webapp'],
-            'database': ['metrics-db', 'postgres', 'db'],
-            'cache': ['metrics-cache', 'redis', 'cache'],
-            'prometheus': ['metrics-prometheus', 'prometheus'],
-            'grafana': ['metrics-grafana', 'grafana'],
-            'cadvisor': ['metrics-cadvisor', 'cadvisor'],
-            'load-generator': ['metrics-load-generator', 'load-generator']
+        # Default metrics to export if none specified
+        self.metrics_to_export = metrics or [
+            'container_cpu_rate',
+            'container_memory_usage',
+            'container_network_receive_rate',
+            'container_network_transmit_rate',
+            'container_fs_reads_rate',
+            'container_fs_writes_rate'
+        ]
+        
+        # Define metric query templates
+        self.metric_queries = {
+            'container_cpu_rate': 'rate(container_cpu_usage_seconds_total{id=~"/kubepods.*"}[1m])',
+            'container_memory_usage': 'container_memory_usage_bytes{id=~"/kubepods.*"}',
+            'container_memory_limit': 'container_spec_memory_limit_bytes{id=~"/kubepods.*"}',
+            'container_network_receive_rate': 'rate(container_network_receive_bytes_total{id=~"/kubepods.*"}[1m])',
+            'container_network_transmit_rate': 'rate(container_network_transmit_bytes_total{id=~"/kubepods.*"}[1m])',
+            'container_fs_reads_rate': 'rate(container_fs_reads_total{id=~"/kubepods.*"}[1m])',
+            'container_fs_writes_rate': 'rate(container_fs_writes_total{id=~"/kubepods.*"}[1m])',
+            'container_fs_read_bytes_rate': 'rate(container_fs_read_bytes_total{id=~"/kubepods.*"}[1m])',
+            'container_fs_write_bytes_rate': 'rate(container_fs_write_bytes_total{id=~"/kubepods.*"}[1m])',
         }
         
     def test_connection(self):
@@ -35,161 +48,90 @@ class ContainerMetricsExporter:
             print(f"❌ Failed to connect to Prometheus: {e}")
             return False
     
-    def get_container_mapping(self):
-        """Get mapping of container IDs to readable names"""
-        print("🔍 Discovering containers...")
-        
-        # Query for container labels to build mapping
-        query = 'container_cpu_usage_seconds_total'
+    def get_all_available_metrics(self):
+        """Get exhaustive list of all available metrics"""
+        print("🔍 Discovering all available metrics...")
         
         try:
-            response = requests.get(f"{self.prom_url}/api/v1/query", 
-                                   params={'query': query}, timeout=10)
+            response = requests.get(f"{self.prom_url}/api/v1/label/__name__/values", timeout=10)
             response.raise_for_status()
             result = response.json()
             
             if result['status'] != 'success':
-                print("❌ Failed to query container metrics")
-                return {}
+                print("❌ Failed to query available metrics")
+                return []
             
-            container_mapping = {}
-            for series in result['data']['result']:
-                metric = series['metric']
-                container_id = metric.get('id', '')
-                container_name = metric.get('name', '')
-                image = metric.get('image', '')
-                
-                # Try to extract container name from different sources
-                friendly_name = self._extract_container_name(container_id, container_name, image)
-                
-                if friendly_name:
-                    container_mapping[container_id] = {
-                        'name': friendly_name,
-                        'original_name': container_name,
-                        'image': image,
-                        'id': container_id
-                    }
+            metrics = result['data']
+            print(f"📊 Found {len(metrics)} total metrics")
             
-            print(f"📦 Found {len(container_mapping)} containers:")
-            for cid, info in container_mapping.items():
-                print(f"   {info['name']} -> {cid[:50]}...")
-            
-            return container_mapping
+            return sorted(metrics)
             
         except Exception as e:
-            print(f"❌ Error discovering containers: {e}")
-            return {}
-    
-    def _extract_container_name(self, container_id, container_name, image):
-        """Extract a friendly container name"""
-        # First try container name if available
-        if container_name:
-            for service, names in self.target_containers.items():
-                if any(name in container_name.lower() for name in names):
-                    return service
+            print(f"❌ Error discovering metrics: {e}")
+            return []
+
+    def save_available_metrics(self, metrics, output_dir):
+        """Save exhaustive list of available metrics to CSV"""
+        timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_path = os.path.join(os.path.dirname(__file__), output_dir)
+        os.makedirs(output_path, exist_ok=True)
         
-        # Try image name
-        if image:
-            for service, names in self.target_containers.items():
-                if any(name in image.lower() for name in names):
-                    return service
+        metrics_file = os.path.join(output_path, f'available_metrics_{timestamp_str}.csv')
         
-        # Try to extract from Docker container ID pattern
-        if '/docker/containers/' in container_id:
-            # Extract container hash and try to map it
-            match = re.search(r'/docker/containers/([a-f0-9]{12})', container_id)
-            if match:
-                return f"container_{match.group(1)}"
+        with open(metrics_file, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['metric_name', 'discovery_timestamp'])
+            for metric in metrics:
+                writer.writerow([metric, timestamp_str])
         
-        # For Kubernetes containers, try to extract pod/container information
-        if 'kubepods' in container_id and 'pod' in container_id:
-            # Extract pod UID and try to identify service
-            pod_match = re.search(r'pod([a-f0-9]{8}_[a-f0-9]{4}_[a-f0-9]{4}_[a-f0-9]{4}_[a-f0-9]{12})', container_id)
-            if pod_match:
-                pod_uid = pod_match.group(1).replace('_', '-')
-                
-                # Try to identify container by the cri-containerd part
-                container_match = re.search(r'cri-containerd-([a-f0-9]{12})', container_id)
-                if container_match:
-                    container_hash = container_match.group(1)
-                    
-                    # For now, return a descriptive name
-                    # In a real setup, you'd query Kubernetes API to get pod/container names
-                    return f"k8s_container_{container_hash}"
+        print(f"📋 Saved {len(metrics)} available metrics to: {metrics_file}")
+        return metrics_file
+
+    def compress_labels(self, labels_dict):
+        """Compress all labels into a single string"""
+        # Remove common labels we store separately
+        filtered_labels = {k: v for k, v in labels_dict.items() 
+                          if k not in ['id', '__name__', 'job', 'instance']}
         
-        # For system containers, use a simple mapping
-        if container_id == '/':
-            return 'system_root'
-        elif '/init.scope' in container_id:
-            return 'system_init'
-        elif '/libpod_parent' in container_id:
-            return 'podman_container'
-        elif 'kubepods' in container_id and container_id.count('/') <= 2:
-            return 'k8s_system'
+        # Create compressed string: key1=value1,key2=value2
+        if not filtered_labels:
+            return ""
         
-        return None
-    
-    def get_targeted_queries(self, container_mapping):
-        """Build queries targeting specific containers"""
-        # Get container IDs for our target containers
-        target_ids = []
-        for cid, info in container_mapping.items():
-            if info['name'] in self.target_containers.keys():
-                target_ids.append(cid)
-        
-        if not target_ids:
-            print("⚠️  No target containers found, using all containers")
-            # Fallback to container name filtering
-            container_filter = '|'.join([
-                name for names in self.target_containers.values() 
-                for name in names
-            ])
-            id_filter = f'id=~".*({container_filter}).*"'
-        else:
-            # Create regex pattern for target container IDs
-            escaped_ids = [re.escape(cid) for cid in target_ids]
-            id_filter = f'id=~"^({"|".join(escaped_ids)})$"'
-        
-        queries = {
-            'container_cpu_rate': f'rate(container_cpu_usage_seconds_total{{{id_filter}}}[1m])',
-            'container_memory': f'container_memory_usage_bytes{{{id_filter}}}',
-            'container_memory_limit': f'container_spec_memory_limit_bytes{{{id_filter}}}',
-            'container_fs_reads': f'rate(container_fs_reads_total{{{id_filter}}}[1m])',
-            'container_fs_writes': f'rate(container_fs_writes_total{{{id_filter}}}[1m])',
-            'container_network_rx': f'rate(container_network_receive_bytes_total{{{id_filter}}}[1m])',
-            'container_network_tx': f'rate(container_network_transmit_bytes_total{{{id_filter}}}[1m])',
-            'http_requests': 'rate(http_requests_total[1m])',
-            'http_request_duration': 'histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[1m]))',
-        }
-        
-        return queries
-    
-    def export_metrics(self, seconds=900, output_dir='../data/raw'):
-        """Export targeted metrics"""
+        return ",".join([f"{k}={v}" for k, v in sorted(filtered_labels.items())])
+
+    def export_metrics(self, seconds=900, output_dir='./data/raw/metrics'):
+        """Export configurable metrics for ALL Kubernetes containers"""
         if not self.test_connection():
             return None
         
-        # Get container mapping
-        container_mapping = self.get_container_mapping()
+        # Get all available metrics first
+        all_metrics = self.get_all_available_metrics()
+        if all_metrics:
+            self.save_available_metrics(all_metrics, output_dir)
         
         # Calculate time range
         end_time = datetime.now()
         start_time = end_time - timedelta(seconds=seconds)
+        timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
         
-        print(f"\n📊 Exporting metrics:")
+        print(f"\n📊 Exporting {len(self.metrics_to_export)} metrics:")
+        print(f"   Metrics: {', '.join(self.metrics_to_export)}")
         print(f"   From: {start_time}")
         print(f"   To:   {end_time}")
         print(f"   Duration: {seconds} seconds")
         
-        # Get targeted queries
-        queries = self.get_targeted_queries(container_mapping)
+        exported_files = []
         
-        all_data = []
-        
-        for metric_name, query in queries.items():
-            print(f"\n📥 Fetching: {metric_name}")
+        # Export each metric separately
+        for metric_name in self.metrics_to_export:
+            if metric_name not in self.metric_queries:
+                print(f"\n⚠️  Unknown metric '{metric_name}' - skipping")
+                continue
+                
+            query = self.metric_queries[metric_name]
+            print(f"\n📥 Fetching {metric_name} for ALL containers")
             print(f"   Query: {query}")
-            
+        
             try:
                 params = {
                     'query': query,
@@ -214,103 +156,117 @@ class ContainerMetricsExporter:
                     print(f"   ⚠️  No data returned")
                     continue
                 
-                # Process each time series
-                count = 0
-                for series in data:
-                    metric_labels = series.get('metric', {})
-                    values = series.get('values', [])
+                # Prepare data for CSV
+                csv_data = []
+            except Exception as e:
+                print(f"   ❌ Error exporting {metric_name}: {e}")
+                continue
+    
+            # Process each time series
+            count = 0
+            for series in data:
+                metric_labels = series.get('metric', {})
+                values = series.get('values', [])
+                
+                # Compress all labels into single column
+                container_labels = self.compress_labels(metric_labels)
+                container_id = metric_labels.get('id', '')
+                
+                for timestamp, value in values:
+                    try:
+                        numeric_value = float(value) if value != 'NaN' else 0.0
+                    except (ValueError, TypeError):
+                        numeric_value = 0.0
                     
-                    container_id = metric_labels.get('id', '')
-                    container_info = container_mapping.get(container_id, {})
+                    row = {
+                        'timestamp': datetime.fromtimestamp(timestamp).isoformat(),
+                        'container_labels': container_labels,
+                        'value': numeric_value,
+                        'container_id': container_id  # Keep for debugging
+                    }
                     
-                    for timestamp, value in values:
-                        try:
-                            numeric_value = float(value) if value != 'NaN' else 0.0
-                        except (ValueError, TypeError):
-                            numeric_value = 0.0
-                        
-                        row = {
-                            'timestamp': datetime.fromtimestamp(timestamp).isoformat(),
-                            'metric_name': metric_name,
-                            'value': numeric_value,
-                            'container_name': container_info.get('name', 'unknown'),
-                            'container_id': container_id,
-                            'container_image': container_info.get('image', ''),
-                        }
-                        
-                        # Add original labels with prefix
-                        for k, v in metric_labels.items():
-                            if k not in ['id', 'name', 'image']:  # Avoid duplicates
-                                row[f'label_{k}'] = v
-                        
-                        all_data.append(row)
-                        count += 1
+                    csv_data.append(row)
+                    count += 1
                 
                 print(f"   ✅ Collected {count:,} points from {len(data)} series")
                 
-            except Exception as e:
-                print(f"   ❌ Error: {e}")
-                continue
-        
-        if not all_data:
-            print("\n❌ No data collected!")
-            return None
-        
-        # Create output directory
-        output_path = os.path.join(os.path.dirname(__file__), output_dir)
-        os.makedirs(output_path, exist_ok=True)
-        
-        # Save to CSV
-        timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_file = os.path.join(output_path, f'metrics_targeted_{timestamp_str}.csv')
-        
-        # Get all unique keys
-        all_keys = set()
-        for row in all_data:
-            all_keys.update(row.keys())
-        all_keys = sorted(all_keys)
-        
-        # Write CSV
-        with open(output_file, 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=all_keys)
-            writer.writeheader()
-            writer.writerows(all_data)
-        
-        file_size_mb = os.path.getsize(output_file) / 1024 / 1024
-        
-        print(f"\n✅ Export complete!")
-        print(f"   Total records: {len(all_data):,}")
-        print(f"   File size: {file_size_mb:.2f} MB")
-        print(f"   Saved to: {output_file}")
-        
-        # Show summary by container
-        container_counts = {}
-        for row in all_data:
-            container_name = row['container_name']
-            container_counts[container_name] = container_counts.get(container_name, 0) + 1
-        
-        print(f"\n📈 Data points by container:")
-        for container, count in sorted(container_counts.items()):
-            percentage = (count / len(all_data)) * 100
-            print(f"   {container}: {count:,} points ({percentage:.1f}%)")
-        
-        return output_file
+                if not csv_data:
+                    print("\n❌ No data collected!")
+                    continue
+                
+                # Create output directory
+                output_path = os.path.join(os.path.dirname(__file__), output_dir)
+                os.makedirs(output_path, exist_ok=True)
+                
+                # Save to CSV with timestamp in filename
+                output_file = os.path.join(output_path, f'container_cpu_rate_{timestamp_str}.csv')
+                
+                # Write CSV
+                fieldnames = ['timestamp', 'container_labels', 'value', 'container_id']
+                with open(output_file, 'w', newline='') as f:
+                    writer = csv.DictWriter(f, fieldnames=fieldnames)
+                    writer.writeheader()
+                    writer.writerows(csv_data)
+                
+                file_size_mb = os.path.getsize(output_file) / 1024 / 1024
+                
+                print(f"\n✅ Export complete!")
+                print(f"   Total records: {len(csv_data):,}")
+                print(f"   File size: {file_size_mb:.2f} MB")
+                print(f"   Saved to: {output_file}")
+                
+                # Show summary by unique container labels
+                unique_containers = set(row['container_labels'] for row in csv_data)
+                print(f"\n📈 Unique containers found: {len(unique_containers)}")
+                
+                # Show sample of container labels
+                if unique_containers:
+                    print("📊 Sample container labels:")
+                    for i, labels in enumerate(sorted(unique_containers)[:5]):
+                        print(f"   {i+1}: {labels}")
+                    if len(unique_containers) > 5:
+                        print(f"   ... and {len(unique_containers) - 5} more")
+                
+                exported_files.append(output_file)
+                
+    
+        return exported_files
 
 
 def main():
     import argparse
     
-    parser = argparse.ArgumentParser(description='Export targeted Prometheus metrics for Docker Compose containers')
+    parser = argparse.ArgumentParser(description='Export configurable metrics from ALL Kubernetes containers via Prometheus')
     parser.add_argument('--seconds', type=int, default=900, 
                        help='Number of seconds to export (default: 900)')
-    parser.add_argument('--output', type=str, default='../data/raw',
-                       help='Output directory')
+    parser.add_argument('--output', type=str, default='./data/raw/metrics',
+                       help='Output directory (default: ./data/raw/metrics)')
     parser.add_argument('--prometheus-url', type=str, default='http://localhost:9090',
                        help='Prometheus URL')
+    parser.add_argument('--metrics', type=str, nargs='+', 
+                       default=['container_cpu_rate'],
+                       help='Metrics to export (default: container_cpu_rate)')
     
     args = parser.parse_args()
     
-    exporter = ContainerMetricsExporter(args.prometheus_url)
+    # Show available metrics
+    print("📋 Available metrics:")
+    available_metrics = [
+        'container_cpu_rate',
+        'container_memory_usage', 
+        'container_memory_limit',
+        'container_network_receive_rate',
+        'container_network_transmit_rate',
+        'container_fs_reads_rate',
+        'container_fs_writes_rate',
+        'container_fs_read_bytes_rate',
+        'container_fs_write_bytes_rate'
+    ]
+    for metric in available_metrics:
+        status = "✅" if metric in args.metrics else "  "
+        print(f"   {status} {metric}")
+    
+    exporter = KubernetesMetricsExporter(args.prometheus_url, metrics=args.metrics)
     exporter.export_metrics(seconds=args.seconds, output_dir=args.output)
 
 

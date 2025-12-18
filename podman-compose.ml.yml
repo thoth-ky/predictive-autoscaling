@@ -1,0 +1,140 @@
+# Podman Compose configuration for ML Training Environment
+#
+# Usage:
+#   CPU version:  podman-compose -f podman-compose.ml.yml up ml-training
+#   GPU version:  podman-compose -f podman-compose.ml.yml up ml-training-gpu
+#   MLflow UI:    podman-compose -f podman-compose.ml.yml up mlflow-ui
+#   Jupyter:      podman-compose -f podman-compose.ml.yml up jupyter
+#
+# Note: Podman runs rootless by default. GPU support requires nvidia-container-toolkit
+#       and proper CDI (Container Device Interface) configuration.
+
+version: '3.8'
+
+services:
+  # ============================================================================
+  # ML Training Service (CPU)
+  # ============================================================================
+  ml-training:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_TYPE: cpu
+    image: predictive-autoscaling-ml:cpu
+    container_name: ml-training-cpu
+    volumes:
+      # Mount source code for development
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+      # Mount data directories
+      - ./data:/app/data
+      # Mount experiment outputs
+      - ./experiments:/app/experiments
+      # Mount notebooks
+      - ./notebooks:/app/notebooks
+      # Mount configs
+      - ./src/config:/app/src/config
+    environment:
+      - PYTHONPATH=/app
+      - MLFLOW_TRACKING_URI=file:///app/experiments/runs
+    command: bash
+    stdin_open: true
+    tty: true
+    networks:
+      - ml-net
+
+  # ============================================================================
+  # ML Training Service (GPU) - requires nvidia-container-toolkit for Podman
+  # ============================================================================
+  ml-training-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_TYPE: gpu
+    image: predictive-autoscaling-ml:gpu
+    container_name: ml-training-gpu
+    # Podman GPU support via device mapping
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-modeset:/dev/nvidia-modeset
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - PYTHONPATH=/app
+      - MLFLOW_TRACKING_URI=file:///app/experiments/runs
+    volumes:
+      # Mount source code for development
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+      # Mount data directories
+      - ./data:/app/data
+      # Mount experiment outputs
+      - ./experiments:/app/experiments
+      # Mount notebooks
+      - ./notebooks:/app/notebooks
+      # Mount configs
+      - ./src/config:/app/src/config
+    command: bash
+    stdin_open: true
+    tty: true
+    # Podman-specific security options for GPU access
+    security_opt:
+      - label=disable
+    networks:
+      - ml-net
+
+  # ============================================================================
+  # MLflow UI Service
+  # ============================================================================
+  mlflow-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_TYPE: cpu
+    image: predictive-autoscaling-ml:cpu
+    container_name: mlflow-ui
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./experiments:/app/experiments
+    environment:
+      - PYTHONPATH=/app
+    command: mlflow-ui
+    networks:
+      - ml-net
+
+  # ============================================================================
+  # Jupyter Notebook Service
+  # ============================================================================
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_TYPE: cpu
+    image: predictive-autoscaling-ml:cpu
+    container_name: jupyter-notebook
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+      - ./data:/app/data
+      - ./experiments:/app/experiments
+      - ./notebooks:/app/notebooks
+      - ./src/config:/app/src/config
+    environment:
+      - PYTHONPATH=/app
+      - MLFLOW_TRACKING_URI=file:///app/experiments/runs
+    command: jupyter
+    networks:
+      - ml-net
+
+networks:
+  ml-net:
+    driver: bridge

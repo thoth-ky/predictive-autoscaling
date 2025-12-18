@@ -1,17 +1,21 @@
 # Multi-stage Dockerfile for Predictive Autoscaling ML Training
 # Supports both CPU and GPU (CUDA) environments
 
+# Use ARG to choose between CPU and GPU base
+ARG BUILD_TYPE=cpu
+
 # ============================================================================
 # Stage 1: Base Image (CPU version)
 # ============================================================================
 FROM python:3.14.2-slim as base-cpu
 
 # Set environment variables for Python optimization and build configuration
-ENV PYTHONUNBUFFERED=1 \              # Force stdout/stderr to be unbuffered for real-time logging
-    PYTHONDONTWRITEBYTECODE=1 \        # Prevent Python from writing .pyc files (saves space & avoids permission issues)
-    PIP_NO_CACHE_DIR=1 \               # Disable pip cache to reduce image size
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \  # Skip pip version check to speed up pip operations
-    DEBIAN_FRONTEND=noninteractive     # Prevent interactive prompts during apt package installation
+# Force stdout/stderr to be unbuffered for real-time logging
+# Prevent Python from writing .pyc files (saves space & avoids permission issues)
+# Disable pip cache to reduce image size
+# Skip pip version check to speed up pip operations
+# Prevent interactive prompts during apt package installation
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 DEBIAN_FRONTEND=noninteractive
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -55,19 +59,18 @@ WORKDIR /app
 # ============================================================================
 # Stage 3: Dependencies Installation
 # ============================================================================
-# Use ARG to choose between CPU and GPU base
-ARG BUILD_TYPE=cpu
+
 FROM base-${BUILD_TYPE} as dependencies
 
 # Upgrade pip
 RUN python -m pip install --upgrade pip setuptools wheel
 
 # Copy requirements file
-COPY requirements.txt .
+COPY pyproject.toml .
 
 # Install Python dependencies
 # For GPU builds, PyTorch will automatically use CUDA if available
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir .
 
 # Install additional utilities for development
 RUN pip install --no-cache-dir \

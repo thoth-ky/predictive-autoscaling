@@ -1,0 +1,117 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Docker/Podman
+Dockerfile
+.dockerignore
+compose*.yml
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# PyCharm
+.idea/
+
+# Environment variables
+.env
+.env.local
+*.env
+
+# Logs
+*.log
+logs/
+
+# Experiments and Model artifacts (volume-mounted if needed)
+experiments/checkpoints/*.pth
+experiments/checkpoints/*.pt
+experiments/runs/
+experiments/results/
+
+# Data files (should be volume-mounted if needed)
+data/raw/*.csv
+data/processed/*.csv
+data/processed/*.pkl
+data/processed/*.parquet
+
+# MLflow
+mlruns/
+
+# Test coverage
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Documentation
+docs/_build/
+*.md
+LICENSE
+
+# Local setup files
+local-setup/
+
+# Kubernetes configs
+k8s/
+
+# Terraform
+cloud/
+
+# Notebooks (exclude from image, use volume mounts)
+notebooks/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Misc
+*.bak
+*.swp
+*.swo
+.claude/

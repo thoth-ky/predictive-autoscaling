@@ -1,0 +1,46 @@
+[project]
+name = "ml-project"
+version = "0.1.0"
+description = "ML project with time series and experiment tracking"
+requires-python = ">=3.10,<=3.14"
+dependencies = [
+    # Core ML
+    "torch==2.9.1",
+    "numpy==2.3.5",
+    "pandas==2.3.3",
+    "scikit-learn==1.8.0",
+    
+    # Data & Processing
+    "prometheus-api-client==0.7.0",
+    "pyarrow==22.0.0",
+    
+    # Time Series Models
+    "prophet==1.2.1",
+    "statsmodels==0.14.6",
+    
+    # Experiment Tracking
+    "mlflow==3.7.0",
+    
+    # Visualization
+    "matplotlib==3.10.8",
+    "seaborn==0.13.2",
+    "plotly==6.5.0",
+    
+    # Jupyter
+    "jupyter==1.1.1",
+    "ipykernel==7.1.0",
+    
+    # AWS SDK
+    "boto3==1.42.13",
+    
+    # Utilities
+    "python-dotenv==1.2.1",
+    "pyyaml==6.0.3",
+    "tqdm==4.67.1",
+    "requests==2.32.5",
+    "setuptools==80.9.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

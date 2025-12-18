@@ -355,33 +355,227 @@ def create_features_and_windows(df: pd.DataFrame,
     return X, y, feature_columns, metadata
 
 
+class MultiHorizonWindowGenerator:
+    """
+    Generate sliding windows with multiple prediction horizons.
+
+    Creates sequences for predicting at multiple time horizons simultaneously
+    (e.g., 5min, 15min, 30min ahead).
+    """
+
+    def __init__(self,
+                 window_size: int = 240,
+                 prediction_horizons: List[int] = None,
+                 stride: int = 4):
+        """
+        Initialize multi-horizon window generator.
+
+        Args:
+            window_size: Number of timesteps to look back
+            prediction_horizons: List of horizons to predict (e.g., [20, 60, 120])
+            stride: Step size between windows
+        """
+        self.window_size = window_size
+        self.prediction_horizons = prediction_horizons or [20, 60, 120]
+        self.stride = stride
+
+    def create_multi_horizon_sequences(self,
+                                      data: np.ndarray,
+                                      timestamps: Optional[pd.DatetimeIndex] = None
+                                      ) -> Tuple:
+        """
+        Create windows with multiple prediction horizons.
+
+        Args:
+            data: Time series data (1D or 2D array)
+            timestamps: Optional timestamps
+
+        Returns:
+            X: Input sequences (n_samples, window_size, n_features)
+            y_dict: Dictionary mapping horizon to targets
+                   {20: (n_samples, 20), 60: (n_samples, 60), 120: (n_samples, 120)}
+            window_timestamps: List of timestamp metadata
+        """
+        # Ensure 2D array
+        if data.ndim == 1:
+            data = data.reshape(-1, 1)
+
+        n_timesteps, n_features = data.shape
+
+        # Calculate max horizon to ensure we have enough data
+        max_horizon = max(self.prediction_horizons)
+        max_index = n_timesteps - self.window_size - max_horizon
+        n_windows = (max_index // self.stride) + 1
+
+        if n_windows <= 0:
+            raise ValueError(
+                f"Not enough data to create windows. Need at least "
+                f"{self.window_size + max_horizon} timesteps, got {n_timesteps}"
+            )
+
+        # Preallocate input array
+        X = np.zeros((n_windows, self.window_size, n_features))
+
+        # Preallocate target arrays for each horizon
+        y_dict = {}
+        for horizon in self.prediction_horizons:
+            y_dict[horizon] = np.zeros((n_windows, horizon, n_features))
+
+        window_timestamps = [] if timestamps is not None else None
+
+        # Create windows
+        for i in range(n_windows):
+            start_idx = i * self.stride
+            end_idx = start_idx + self.window_size
+
+            # Input window
+            X[i] = data[start_idx:end_idx]
+
+            # Target windows for each horizon
+            for horizon in self.prediction_horizons:
+                target_start = end_idx
+                target_end = target_start + horizon
+                y_dict[horizon][i] = data[target_start:target_end]
+
+            if timestamps is not None:
+                timestamp_info = {
+                    'window_start': timestamps[start_idx],
+                    'window_end': timestamps[end_idx - 1],
+                }
+                # Add target ranges for each horizon
+                for horizon in self.prediction_horizons:
+                    target_start = end_idx
+                    target_end = target_start + horizon
+                    timestamp_info[f'target_start_{horizon}'] = timestamps[target_start]
+                    timestamp_info[f'target_end_{horizon}'] = timestamps[target_end - 1]
+
+                window_timestamps.append(timestamp_info)
+
+        # For univariate prediction, squeeze the feature dimension
+        if n_features == 1:
+            for horizon in self.prediction_horizons:
+                y_dict[horizon] = y_dict[horizon].squeeze(-1)
+
+        return X, y_dict, window_timestamps
+
+
+def create_multi_horizon_features_and_windows(df: pd.DataFrame,
+                                             container_name: str = 'metrics-webapp',
+                                             metric_name: str = 'container_cpu',
+                                             window_size_minutes: int = 60,
+                                             prediction_horizon_minutes: List[int] = None,
+                                             include_temporal: bool = True,
+                                             include_lags: bool = True,
+                                             include_rolling: bool = True) -> Tuple:
+    """
+    Complete pipeline for multi-horizon prediction: prepare data, add features, create windows.
+
+    Args:
+        df: Raw metrics DataFrame
+        container_name: Container to analyze
+        metric_name: Metric to predict
+        window_size_minutes: Minutes of history to use
+        prediction_horizon_minutes: List of minutes ahead to predict (e.g., [5, 15, 30])
+        include_temporal: Add temporal features
+        include_lags: Add lag features
+        include_rolling: Add rolling statistics
+
+    Returns:
+        X: Input sequences
+        y_dict: Target sequences per horizon
+        feature_names: List of feature names
+        metadata: Window metadata
+    """
+    if prediction_horizon_minutes is None:
+        prediction_horizon_minutes = [5, 15, 30]
+
+    # Step 1: Prepare container metrics
+    prepared = prepare_container_metrics(df, container_name, metric_name)
+
+    # Step 2: Add features
+    if include_temporal:
+        prepared = add_temporal_features(prepared)
+
+    if include_lags:
+        prepared = add_lag_features(prepared)
+
+    if include_rolling:
+        prepared = add_rolling_features(prepared)
+
+    # Drop NaN rows created by lag/rolling features
+    prepared = prepared.dropna().reset_index(drop=True)
+
+    # Step 3: Create windows
+    # Convert minutes to number of 15-second intervals
+    window_size = window_size_minutes * 4  # 4 intervals per minute
+    prediction_horizons = [h * 4 for h in prediction_horizon_minutes]  # Convert to timesteps
+
+    generator = MultiHorizonWindowGenerator(
+        window_size=window_size,
+        prediction_horizons=prediction_horizons,
+        stride=4  # Create window every minute
+    )
+
+    # Get feature columns (exclude timestamp and original value)
+    feature_columns = [col for col in prepared.columns
+                      if col not in ['timestamp', 'value']]
+
+    if not feature_columns:
+        # If no features, just use the raw value
+        feature_columns = ['value']
+
+    # Prepare data arrays
+    data_values = prepared[feature_columns].values
+    timestamps = pd.DatetimeIndex(prepared['timestamp'])
+
+    X, y_dict, metadata = generator.create_multi_horizon_sequences(
+        data=data_values,
+        timestamps=timestamps
+    )
+
+    print(f"✅ Created {len(X)} windows with multiple horizons")
+    print(f"   Input shape: {X.shape} (samples, timesteps, features)")
+    print(f"   Target horizons:")
+    for h, y in y_dict.items():
+        horizon_minutes = h // 4
+        print(f"     {horizon_minutes} min ({h} steps): {y.shape}")
+    print(f"   Features: {feature_columns}")
+
+    return X, y_dict, feature_columns, metadata
+
+
 if __name__ == '__main__':
     # Example usage
     print("Sliding Window Feature Engineering Module")
     print("=" * 60)
-    print("\nExample: Create 60-minute windows to predict 15 minutes ahead")
-    
+    print("\nExample: Create 60-minute windows to predict at multiple horizons")
+
     # Load example data
     import glob
     data_files = glob.glob('../data/raw/metrics_*.csv')
-    
+
     if data_files:
         latest_file = max(data_files, key=lambda x: x)
         print(f"\nLoading: {latest_file}")
-        
+
         df = pd.read_csv(latest_file)
-        
-        # Create features and windows
+
+        # Test single horizon (original functionality)
+        print("\n--- Single Horizon (15 min) ---")
         X, y, features, meta = create_features_and_windows(
             df,
             container_name='metrics-webapp',
             window_size_minutes=60,
             prediction_horizon_minutes=15
         )
-        
-        print(f"\n📊 Window Statistics:")
-        print(f"   Training samples: {len(X)}")
-        print(f"   Input features: {len(features)}")
-        print(f"   Prediction horizon: 15 minutes")
+
+        # Test multi-horizon
+        print("\n--- Multi-Horizon (5, 15, 30 min) ---")
+        X_multi, y_multi_dict, features_multi, meta_multi = create_multi_horizon_features_and_windows(
+            df,
+            container_name='metrics-webapp',
+            window_size_minutes=60,
+            prediction_horizon_minutes=[5, 15, 30]
+        )
     else:
         print("\n⚠️  No data files found. Run export script first.")

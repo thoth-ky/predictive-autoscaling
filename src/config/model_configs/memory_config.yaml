@@ -1,0 +1,62 @@
+container_name: webapp
+data:
+  include_lag_features: true
+  include_rolling_features: true
+  include_temporal_features: true
+  normalization: minmax
+  outlier_threshold: 3.0
+  prediction_horizons:
+  - 20
+  - 60
+  - 120
+  processed_data_path: /home/thoth/dpn/predictive-autoscaling/data/processed
+  raw_data_path: /home/thoth/dpn/predictive-autoscaling/data/raw
+  stride: 4
+  test_split: 0.15
+  train_split: 0.7
+  val_split: 0.15
+  window_size: 240
+metric_name: memory
+model:
+  arima_order: !!python/tuple
+  - 1
+  - 1
+  - 1
+  arima_seasonal_order: !!python/tuple
+  - 0
+  - 0
+  - 0
+  - 0
+  bidirectional: false
+  dropout: 0.2
+  hidden_size: 64
+  input_size: 1
+  model_type: lstm
+  num_layers: 2
+  output_size: 1
+  prophet_changepoint_prior_scale: 0.05
+  prophet_daily_seasonality: true
+  prophet_weekly_seasonality: true
+  prophet_yearly_seasonality: false
+training:
+  batch_size: 32
+  checkpoint_dir: /home/thoth/dpn/predictive-autoscaling/experiments/checkpoints
+  device: cpu
+  epochs: 100
+  experiment_name: predictive-autoscaling
+  horizon_weights:
+    20: 1.0
+    60: 1.5
+    120: 1.0
+  learning_rate: 0.001
+  log_interval: 10
+  loss_function: mse
+  min_delta: 0.0001
+  num_workers: 4
+  optimizer: adam
+  patience: 15
+  sagemaker_instance_type: ml.p3.2xlarge
+  save_every_n_epochs: 10
+  tracking_uri: /home/thoth/dpn/predictive-autoscaling/experiments/runs
+  use_sagemaker: false
+  weight_decay: 0.0

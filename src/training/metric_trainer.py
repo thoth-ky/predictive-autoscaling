@@ -361,6 +361,29 @@ class MetricTrainer:
         print(f"Training {self.model_type.upper()} for {self.metric_name}")
         print(f"{'=' * 60}")
 
+        # Start MLflow run
+        if self.use_mlflow:
+            self.mlflow.start_run()
+            # Log parameters
+            params = {
+                "model_type": self.model_type,
+                "metric_name": self.metric_name,
+                "container_name": self.config.container_name,
+                "train_samples": len(self.X_train),
+                "prediction_horizons": self.config.data.prediction_horizons,
+            }
+            # Add model-specific params
+            if self.model_type == "arima":
+                params["arima_order"] = str(self.config.model.arima_order)
+                params["arima_seasonal_order"] = str(self.config.model.arima_seasonal_order)
+            elif self.model_type == "prophet":
+                params["changepoint_prior_scale"] = self.config.model.prophet_changepoint_prior_scale
+                params["yearly_seasonality"] = self.config.model.prophet_yearly_seasonality
+                params["weekly_seasonality"] = self.config.model.prophet_weekly_seasonality
+                params["daily_seasonality"] = self.config.model.prophet_daily_seasonality
+
+            self.mlflow.log_params(params)
+
         # For statistical models, use the raw sequence data
         # We'll use only the first feature if multivariate
         if self.X_train.ndim == 3:
@@ -388,6 +411,10 @@ class MetricTrainer:
         save_path = os.path.join(save_dir, f"{self.model_type}_model.pkl")
         self.model.save_model(save_path)
         print(f"Model saved to {save_path}")
+
+        # Log model artifact (but don't end run yet - metrics will be logged during evaluation)
+        if self.use_mlflow:
+            self.mlflow.log_artifact(save_path)
 
     def train(self):
         """Main training entry point."""
@@ -442,15 +469,64 @@ class MetricTrainer:
 
         else:
             # Statistical model evaluation
+            # ARIMA/Prophet make one continuous forecast, so we compare against
+            # the first test sample's targets (treating it as continuation)
             horizons = sorted(self.config.data.prediction_horizons)
-            y_pred_dict = self.model.predict_multi_horizon(horizons)
+            y_pred_dict_raw = self.model.predict_multi_horizon(horizons)
+
+            # Denormalize predictions for statistical models
+            y_pred_dict = {}
+            for horizon in horizons:
+                # Reshape to (1, horizon) for consistency, then denormalize
+                pred_reshaped = y_pred_dict_raw[horizon].reshape(1, -1)
+                y_pred_dict[horizon] = (
+                    self.y_scaler[horizon]
+                    .inverse_transform(pred_reshaped)
+                    .reshape(-1)
+                )
+
+            # For statistical models, evaluate only on first test window
+            # since they produce a continuous forecast, not per-window predictions
+            y_test_dict_eval = {}
+            for horizon in horizons:
+                # Denormalize test data
+                test_denorm = (
+                    self.y_scaler[horizon]
+                    .inverse_transform(y_test_dict[horizon].reshape(-1, 1))
+                    .reshape(y_test_dict[horizon].shape)
+                )
+                # Use only first test window for comparison
+                y_test_dict_eval[horizon] = test_denorm[0]
+
+            # Override for evaluation
+            y_test_dict = y_test_dict_eval
 
         # Compute metrics
         evaluator = ModelEvaluator(metric_name=self.metric_name)
         results = evaluator.horizon_analysis(y_test_dict, y_pred_dict)
         evaluator.print_evaluation_report(y_test_dict, y_pred_dict)
 
+        # Log evaluation metrics to MLflow
+        if self.use_mlflow and self.model_type in ["arima", "prophet"]:
+            # Log metrics for each horizon
+            for horizon_name, metrics in results.get("by_horizon", {}).items():
+                for metric_name, value in metrics.items():
+                    self.mlflow.log_metric(f"{horizon_name}_{metric_name}", value)
+
+            # Log overall metrics
+            if "overall" in results:
+                for metric_name, value in results["overall"].items():
+                    self.mlflow.log_metric(f"overall_{metric_name}", value)
+
         return results
+
+    def finalize(self):
+        """Finalize training and close MLflow run if active."""
+        if self.use_mlflow:
+            active_run = self.mlflow.active_run()
+            if active_run:
+                self.mlflow.end_run()
+                print("\nMLflow run closed.")
 
 
 if __name__ == "__main__":

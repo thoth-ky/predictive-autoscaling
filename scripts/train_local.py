@@ -213,6 +213,9 @@ Examples:
     # Override model type
     config.model.model_type = args.model_type
 
+    # Override container name
+    config.container_name = args.container
+
     # Override epochs if specified
     if args.epochs:
         config.training.epochs = args.epochs
@@ -252,6 +255,9 @@ Examples:
     # Evaluate
     print("\nEvaluating on test set...")
     results = trainer.evaluate()
+
+    # Finalize training (close MLflow run if active)
+    trainer.finalize()
 
     # Save results summary
     results_dir = f"experiments/results/{args.metric}"

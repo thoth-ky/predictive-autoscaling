@@ -71,7 +71,7 @@ class MetricPreprocessor:
             service_col: Column name for service/container identifier
 
         Returns:
-            Preprocessed DataFrame with timestamp and value columns
+            Preprocessed DataFrame with timestamp, value, container_name, and metric_name columns
         """
         # 1. Filter for specific metric and container
         filtered = self._filter_data(df, container_name, service_col)
@@ -86,7 +86,7 @@ class MetricPreprocessor:
         transformed = self._metric_specific_transform(filtered.copy())
 
         # 3. Resample to ensure regular intervals
-        resampled = self._resample_data(transformed)
+        resampled = self._resample_data(transformed, container_name)
 
         # 4. Handle outliers
         cleaned = self._handle_outliers(resampled)
@@ -148,12 +148,13 @@ class MetricPreprocessor:
 
         return df
 
-    def _resample_data(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _resample_data(self, df: pd.DataFrame, container_name: str) -> pd.DataFrame:
         """
         Resample to regular intervals and handle missing values.
 
         Args:
             df: DataFrame with timestamp and value columns
+            container_name: Name of container for metadata
 
         Returns:
             Resampled DataFrame with regular intervals
@@ -176,10 +177,13 @@ class MetricPreprocessor:
         # Backward fill any remaining NaNs
         resampled = resampled.bfill(limit=3)
 
-        # Create clean DataFrame
-        result = pd.DataFrame(
-            {"timestamp": resampled.index, "value": resampled.values}
-        ).reset_index(drop=True)
+        # Create clean DataFrame with container and metric information
+        result = pd.DataFrame({
+            "timestamp": resampled.index, 
+            "value": resampled.values,
+            "container_name": container_name,
+            "metric_name": self.metric_type.value
+        }).reset_index(drop=True)
 
         # Drop any remaining NaNs
         result = result.dropna()

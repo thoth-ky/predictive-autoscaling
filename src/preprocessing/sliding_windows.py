@@ -185,8 +185,13 @@ def prepare_container_metrics(
     # Backward fill any remaining NaNs
     resampled = resampled.fillna(method="bfill", limit=3)
 
-    # Create DataFrame
-    result = pd.DataFrame({"timestamp": resampled.index, "value": resampled.values})
+    # Create DataFrame with container and metric information
+    result = pd.DataFrame({
+        "timestamp": resampled.index, 
+        "value": resampled.values,
+        "container_name": container_name,
+        "metric_name": metric_name
+    })
 
     return result
 
@@ -336,9 +341,9 @@ def create_features_and_windows(
         stride=4,  # Create window every minute
     )
 
-    # Get feature columns (exclude timestamp and original value)
+    # Get feature columns (exclude timestamp, original value, and metadata)
     feature_columns = [
-        col for col in prepared.columns if col not in ["timestamp", "value"]
+        col for col in prepared.columns if col not in ["timestamp", "value", "container_name", "metric_name"]
     ]
 
     if not feature_columns:
@@ -526,9 +531,9 @@ def create_multi_horizon_features_and_windows(
         stride=4,  # Create window every minute
     )
 
-    # Get feature columns (exclude timestamp and original value)
+    # Get feature columns (exclude timestamp, original value, and metadata)
     feature_columns = [
-        col for col in prepared.columns if col not in ["timestamp", "value"]
+        col for col in prepared.columns if col not in ["timestamp", "value", "container_name", "metric_name"]
     ]
 
     if not feature_columns:

@@ -30,7 +30,7 @@ WORKDIR /app
 # ============================================================================
 # Stage 2: GPU Image (CUDA support)
 # ============================================================================
-FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu24.04 as base-gpu
+FROM nvidia/cuda:13.0.2-cudnn-runtime-ubuntu24.04 as base-gpu
 
 # Install Python 3.14 and system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \

@@ -21,7 +21,7 @@ import numpy as np
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.config.base_config import load_config, create_default_config  # noqa: E402
-from src.preprocessing.metric_specific import prepare_metric_data  # noqa: E402
+from src.preprocessing.metric_specific import prepare_metric_data, MetricType  # noqa: E402
 from src.preprocessing.sliding_windows import (  # noqa: E402
     create_multi_horizon_features_and_windows,
 )
@@ -52,7 +52,7 @@ def prepare_training_data(
     container_name: str = "webapp",
     data_file: Optional[str] = None,
     window_size_minutes: int = 60,
-    prediction_horizons_minutes: list = None,
+    prediction_horizons_minutes: Optional[list] = None,
 ):
     """
     Load and prepare data for training.
@@ -90,17 +90,14 @@ def prepare_training_data(
     print(
         f"  Time range: {processed['timestamp'].min()} to {processed['timestamp'].max()}"
     )
-
+    print(f"Sample data:")
+    print(processed.head())
     # Create features and windows
     print("\nCreating features and windows...")
     X, y_dict, feature_names, metadata = create_multi_horizon_features_and_windows(
         processed,
         container_name=container_name,
-        metric_name=(
-            f"container_{metric_name}"
-            if not metric_name.startswith("container_")
-            else metric_name
-        ),
+        metric_name=MetricType.from_string(metric_name).value,
         window_size_minutes=window_size_minutes,
         prediction_horizon_minutes=prediction_horizons_minutes,
     )
@@ -233,6 +230,7 @@ Examples:
         print("\nPlease ensure you have metrics data available.")
         print("Run one of the export scripts first:")
         print("  python scripts/exporters/export_metrics_targeted.py")
+        raise e
         sys.exit(1)
 
     # Create trainer

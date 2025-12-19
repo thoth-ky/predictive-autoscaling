@@ -1,5 +1,4 @@
 data
-data/processed/*
 *.pyc
 __pycache__/
 .ipynb_checkpoints/
@@ -9,3 +8,4 @@ venv
 .terraform.lock.hcl
 
 .claude/
+mlflow.db

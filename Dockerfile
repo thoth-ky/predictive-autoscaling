@@ -32,10 +32,15 @@ WORKDIR /app
 # ============================================================================
 FROM nvidia/cuda:13.0.2-cudnn-runtime-ubuntu24.04 as base-gpu
 
-# Install Python 3.14 and system dependencies
+# Install Python 3.14 from deadsnakes PPA and system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa -y \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
     python3.14 \
     python3.14-dev \
+    python3.14-venv \
     python3-pip \
     build-essential \
     curl \
@@ -63,7 +68,7 @@ WORKDIR /app
 FROM base-${BUILD_TYPE} as dependencies
 
 # Upgrade pip
-RUN python -m pip install --upgrade pip setuptools wheel
+# RUN python -m pip install --upgrade pip setuptools wheel
 
 # Copy requirements file
 COPY pyproject.toml .

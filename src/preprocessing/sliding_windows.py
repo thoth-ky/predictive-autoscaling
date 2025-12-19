@@ -466,10 +466,10 @@ class MultiHorizonWindowGenerator:
 
                 window_timestamps.append(timestamp_info)
 
-        # For univariate prediction, squeeze the feature dimension
-        if n_features == 1:
-            for horizon in self.prediction_horizons:
-                y_dict[horizon] = y_dict[horizon].squeeze(-1)
+        # For univariate prediction, extract only the first feature (value column)
+        # Even with multivariate inputs, we predict only the primary metric
+        for horizon in self.prediction_horizons:
+            y_dict[horizon] = y_dict[horizon][:, :, 0]
 
         return X, y_dict, window_timestamps
 

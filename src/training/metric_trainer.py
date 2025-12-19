@@ -202,6 +202,9 @@ class MetricTrainer:
         Returns:
             Average training loss
         """
+        if self.model_type != "lstm" or self.model is None:
+            raise ValueError("train_epoch is only supported for LSTM models")
+        
         self.model.train()
         total_loss = 0.0
         n_batches = 0

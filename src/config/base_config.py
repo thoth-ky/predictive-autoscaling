@@ -109,7 +109,7 @@ class TrainingConfig:
 
     # Experiment tracking
     experiment_name: str = "predictive-autoscaling"
-    tracking_uri: str = "/home/thoth/dpn/predictive-autoscaling/experiments/runs"
+    tracking_uri: str = "sqlite:////home/thoth/dpn/predictive-autoscaling/experiments/mlflow.db"
     log_interval: int = 10  # Log every N batches
 
     # SageMaker specific

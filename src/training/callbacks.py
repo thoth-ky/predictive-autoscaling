@@ -221,7 +221,7 @@ class ModelCheckpoint:
         if not os.path.exists(best_path):
             raise FileNotFoundError(f"No best model found at {best_path}")
 
-        checkpoint = torch.load(best_path)
+        checkpoint = torch.load(best_path, weights_only=False)
         model.load_state_dict(checkpoint["model_state_dict"])
 
         if optimizer is not None:

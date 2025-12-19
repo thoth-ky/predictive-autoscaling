@@ -188,6 +188,19 @@ Examples:
     )
 
     parser.add_argument(
+        "--register-model",
+        action="store_true",
+        default=True,
+        help="Register model in MLflow Model Registry (default: True)",
+    )
+
+    parser.add_argument(
+        "--no-register",
+        action="store_true",
+        help="Don't register model in MLflow Model Registry",
+    )
+
+    parser.add_argument(
         "--epochs", type=int, help="Number of training epochs (overrides config)"
     )
 
@@ -239,8 +252,15 @@ Examples:
         raise e
         sys.exit(1)
 
+    # Determine model registration setting
+    register_model = args.register_model and not args.no_register
+
     # Create trainer
-    trainer = MetricTrainer(config, use_mlflow=not args.no_mlflow)
+    trainer = MetricTrainer(
+        config,
+        use_mlflow=not args.no_mlflow,
+        register_model=register_model
+    )
 
     # Prepare normalized data
     trainer.prepare_data(X_train, y_train_dict, X_val, y_val_dict, X_test, y_test_dict)

@@ -20,6 +20,12 @@ from src.models.utils.normalizers import TimeSeriesNormalizer
 from src.training.callbacks import EarlyStopping, ModelCheckpoint
 from src.training.data_loaders import create_data_loaders
 from src.config.base_config import ExperimentConfig
+from src.training.mlflow_utils import (
+    MLflowModelLogger,
+    create_model_name,
+    get_model_tags,
+    get_model_description,
+)
 
 
 class MetricTrainer:
@@ -34,17 +40,24 @@ class MetricTrainer:
     - MLflow experiment tracking
     """
 
-    def __init__(self, config: ExperimentConfig, use_mlflow: bool = True):
+    def __init__(
+        self,
+        config: ExperimentConfig,
+        use_mlflow: bool = True,
+        register_model: bool = True
+    ):
         """
         Initialize trainer.
 
         Args:
             config: Experiment configuration
             use_mlflow: Whether to use MLflow tracking
+            register_model: Whether to register model in MLflow Model Registry
         """
         self.config = config
         self.metric_name = config.metric_name
         self.model_type = config.model.model_type
+        self.register_model = register_model
 
         # Device setup
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -52,6 +65,7 @@ class MetricTrainer:
 
         # MLflow setup
         self.use_mlflow = use_mlflow
+        self.mlflow_logger = None
         if use_mlflow:
             try:
                 import mlflow
@@ -61,6 +75,13 @@ class MetricTrainer:
                     f"{config.training.experiment_name}-{self.metric_name}"
                 )
                 self.mlflow = mlflow
+
+                # Initialize MLflow model logger
+                self.mlflow_logger = MLflowModelLogger(
+                    mlflow_module=mlflow,
+                    metric_name=self.metric_name,
+                    model_type=self.model_type,
+                )
             except ImportError:
                 print("MLflow not available, skipping tracking")
                 self.use_mlflow = False
@@ -345,7 +366,71 @@ class MetricTrainer:
                 break
 
         # Load best model
-        checkpoint.load_best_model(self.model, self.optimizer)
+        best_checkpoint = checkpoint.load_best_model(self.model, self.optimizer)
+        self.best_val_loss = best_checkpoint["best_score"]
+
+        # Log model to MLflow
+        if self.use_mlflow and self.mlflow_logger:
+            print("\nLogging model to MLflow...")
+
+            # Create input/output examples from validation data
+            input_example = self.X_val[0:1]  # First validation sample
+            with torch.no_grad():
+                self.model.eval()
+                X_example = torch.FloatTensor(input_example).to(self.device)
+                output_example = self.model.predict_all_horizons(X_example)
+                output_example = {h: pred.cpu().numpy() for h, pred in output_example.items()}
+
+            # Log the model
+            checkpoint_path = os.path.join(
+                self.config.training.checkpoint_dir,
+                self.metric_name,
+                "best_model.pth"
+            )
+
+            registered_model_name = None
+            if self.register_model:
+                registered_model_name = create_model_name(
+                    metric_name=self.metric_name,
+                    model_type=self.model_type,
+                    container_name=self.config.container_name,
+                )
+
+            model_uri = self.mlflow_logger.log_pytorch_model(
+                model=self.model,
+                artifact_path="model",
+                config=self.config,
+                X_scaler=self.X_scaler,
+                y_scaler=self.y_scaler,
+                input_example=input_example,
+                output_example=output_example,
+                registered_model_name=registered_model_name,
+                checkpoint_path=checkpoint_path,
+            )
+
+            print(f"  Model logged to: {model_uri}")
+
+            # Add tags and description if registered
+            if self.register_model and registered_model_name:
+                print(f"  Model registered as: {registered_model_name}")
+
+                # Get latest version
+                client = self.mlflow.tracking.MlflowClient()
+                versions = client.search_model_versions(f"name='{registered_model_name}'")
+                if versions:
+                    latest_version = max(versions, key=lambda v: int(v.version))
+
+                    # Set tags
+                    tags = get_model_tags(self.config, self.best_val_loss)
+                    for key, value in tags.items():
+                        client.set_model_version_tag(
+                            name=registered_model_name,
+                            version=latest_version.version,
+                            key=key,
+                            value=value,
+                        )
+
+                    print(f"  Model version: {latest_version.version}")
 
         # End MLflow run
         if self.use_mlflow:
@@ -412,9 +497,11 @@ class MetricTrainer:
         self.model.save_model(save_path)
         print(f"Model saved to {save_path}")
 
-        # Log model artifact (but don't end run yet - metrics will be logged during evaluation)
-        if self.use_mlflow:
-            self.mlflow.log_artifact(save_path)
+        # Store path for later MLflow logging
+        self.statistical_model_path = save_path
+
+        # Note: Model will be logged to MLflow after evaluation is complete
+        # to include evaluation metrics in the model metadata
 
     def train(self):
         """Main training entry point."""
@@ -517,6 +604,84 @@ class MetricTrainer:
             if "overall" in results:
                 for metric_name, value in results["overall"].items():
                     self.mlflow.log_metric(f"overall_{metric_name}", value)
+
+            # Log statistical model to MLflow after evaluation
+            if self.mlflow_logger and hasattr(self, "statistical_model_path"):
+                print("\nLogging model to MLflow...")
+
+                # Create input/output examples
+                input_example = self.X_val[0:1]
+                horizons = sorted(self.config.data.prediction_horizons)
+                output_example_raw = self.model.predict_multi_horizon(horizons)
+
+                # Denormalize for proper example
+                output_example = {}
+                for horizon in horizons:
+                    pred_reshaped = output_example_raw[horizon].reshape(1, -1)
+                    output_example[horizon] = (
+                        self.y_scaler[horizon]
+                        .inverse_transform(pred_reshaped)
+                        .reshape(-1)
+                    )
+
+                # Determine if we should register
+                registered_model_name = None
+                if self.register_model:
+                    registered_model_name = create_model_name(
+                        metric_name=self.metric_name,
+                        model_type=self.model_type,
+                        container_name=self.config.container_name,
+                    )
+
+                # Log the model
+                model_uri = self.mlflow_logger.log_statistical_model(
+                    model=self.model,
+                    artifact_path="model",
+                    config=self.config,
+                    X_scaler=self.X_scaler,
+                    y_scaler=self.y_scaler,
+                    model_path=self.statistical_model_path,
+                    input_example=input_example,
+                    output_example=output_example,
+                    registered_model_name=registered_model_name,
+                )
+
+                print(f"  Model logged to: {model_uri}")
+
+                # Add tags and description if registered
+                if self.register_model and registered_model_name:
+                    print(f"  Model registered as: {registered_model_name}")
+
+                    # Get latest version
+                    client = self.mlflow.tracking.MlflowClient()
+                    versions = client.search_model_versions(f"name='{registered_model_name}'")
+                    if versions:
+                        latest_version = max(versions, key=lambda v: int(v.version))
+
+                        # Set tags
+                        tags = get_model_tags(self.config)
+                        # Add evaluation metrics to tags
+                        if "overall" in results:
+                            for metric_name, value in results["overall"].items():
+                                tags[f"eval_{metric_name}"] = f"{value:.4f}"
+
+                        for key, value in tags.items():
+                            client.set_model_version_tag(
+                                name=registered_model_name,
+                                version=latest_version.version,
+                                key=key,
+                                value=value,
+                            )
+
+                        # Set description
+                        description = get_model_description(self.config, results)
+                        client.update_model_version(
+                            name=registered_model_name,
+                            version=latest_version.version,
+                            description=description,
+                        )
+
+                        print(f"  Model version: {latest_version.version}")
 
         return results
 

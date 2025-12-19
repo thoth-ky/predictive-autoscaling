@@ -287,4 +287,4 @@ if __name__ == "__main__":
                 print(f"\n{metric.upper()}: {str(e)}")
     else:
         print("\nNo data files found. Run metrics export script first.")
-        print("Example: python scripts/export_metrics_simple.py --seconds 900")
+        print("Example: python scripts/exporters/export_metrics_targeted.py")

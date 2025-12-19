@@ -19,7 +19,7 @@ class TimeSeriesNormalizer:
     - Robust scaling (median/IQR)
     """
 
-    def __init__(self, method: str = 'minmax'):
+    def __init__(self, method: str = "minmax"):
         """
         Initialize normalizer.
 
@@ -28,18 +28,18 @@ class TimeSeriesNormalizer:
         """
         self.method = method
 
-        if method == 'minmax':
+        if method == "minmax":
             self.scaler = MinMaxScaler()
-        elif method == 'standard':
+        elif method == "standard":
             self.scaler = StandardScaler()
-        elif method == 'robust':
+        elif method == "robust":
             self.scaler = RobustScaler()
         else:
             raise ValueError(f"Unknown normalization method: {method}")
 
         self.is_fitted = False
 
-    def fit(self, data: np.ndarray) -> 'TimeSeriesNormalizer':
+    def fit(self, data: np.ndarray) -> "TimeSeriesNormalizer":
         """
         Fit the normalizer on training data.
 
@@ -125,33 +125,38 @@ class TimeSeriesNormalizer:
 
     def save(self, path: str):
         """Save normalizer to file."""
-        with open(path, 'wb') as f:
-            pickle.dump({
-                'method': self.method,
-                'scaler': self.scaler,
-                'is_fitted': self.is_fitted
-            }, f)
+        with open(path, "wb") as f:
+            pickle.dump(
+                {
+                    "method": self.method,
+                    "scaler": self.scaler,
+                    "is_fitted": self.is_fitted,
+                },
+                f,
+            )
 
     @classmethod
-    def load(cls, path: str) -> 'TimeSeriesNormalizer':
+    def load(cls, path: str) -> "TimeSeriesNormalizer":
         """Load normalizer from file."""
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             data = pickle.load(f)
 
-        normalizer = cls(method=data['method'])
-        normalizer.scaler = data['scaler']
-        normalizer.is_fitted = data['is_fitted']
+        normalizer = cls(method=data["method"])
+        normalizer.scaler = data["scaler"]
+        normalizer.is_fitted = data["is_fitted"]
 
         return normalizer
 
 
-def normalize_data(X_train: np.ndarray,
-                   X_val: Optional[np.ndarray] = None,
-                   X_test: Optional[np.ndarray] = None,
-                   y_train: Optional[np.ndarray] = None,
-                   y_val: Optional[np.ndarray] = None,
-                   y_test: Optional[np.ndarray] = None,
-                   method: str = 'minmax') -> Tuple:
+def normalize_data(
+    X_train: np.ndarray,
+    X_val: Optional[np.ndarray] = None,
+    X_test: Optional[np.ndarray] = None,
+    y_train: Optional[np.ndarray] = None,
+    y_val: Optional[np.ndarray] = None,
+    y_test: Optional[np.ndarray] = None,
+    method: str = "minmax",
+) -> Tuple:
     """
     Normalize train/val/test sets using the same fitted scaler.
 
@@ -170,34 +175,31 @@ def normalize_data(X_train: np.ndarray,
     X_scaler = TimeSeriesNormalizer(method=method)
     X_train_norm = X_scaler.fit_transform(X_train)
 
-    result = {
-        'X_train': X_train_norm,
-        'X_scaler': X_scaler
-    }
+    result = {"X_train": X_train_norm, "X_scaler": X_scaler}
 
     # Transform validation and test if provided
     if X_val is not None:
-        result['X_val'] = X_scaler.transform(X_val)
+        result["X_val"] = X_scaler.transform(X_val)
     if X_test is not None:
-        result['X_test'] = X_scaler.transform(X_test)
+        result["X_test"] = X_scaler.transform(X_test)
 
     # Normalize targets if provided
     y_scaler = None
     if y_train is not None:
         y_scaler = TimeSeriesNormalizer(method=method)
-        result['y_train'] = y_scaler.fit_transform(y_train)
+        result["y_train"] = y_scaler.fit_transform(y_train)
 
         if y_val is not None:
-            result['y_val'] = y_scaler.transform(y_val)
+            result["y_val"] = y_scaler.transform(y_val)
         if y_test is not None:
-            result['y_test'] = y_scaler.transform(y_test)
+            result["y_test"] = y_scaler.transform(y_test)
 
-        result['y_scaler'] = y_scaler
+        result["y_scaler"] = y_scaler
 
     return result
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Test normalizers
     print("Time Series Normalizers")
     print("=" * 60)
@@ -213,22 +215,26 @@ if __name__ == '__main__':
     print(f"  y_train range: [{y_train.min():.2f}, {y_train.max():.2f}]")
 
     # Test each normalization method
-    for method in ['minmax', 'standard', 'robust']:
+    for method in ["minmax", "standard", "robust"]:
         print(f"\n{method.upper()} Normalization:")
 
         result = normalize_data(X_train, X_val, y_train=y_train, method=method)
 
-        X_train_norm = result['X_train']
-        X_val_norm = result['X_val']
-        y_train_norm = result['y_train']
+        X_train_norm = result["X_train"]
+        X_val_norm = result["X_val"]
+        y_train_norm = result["y_train"]
 
-        print(f"  X_train_norm range: [{X_train_norm.min():.2f}, {X_train_norm.max():.2f}]")
+        print(
+            f"  X_train_norm range: [{X_train_norm.min():.2f}, {X_train_norm.max():.2f}]"
+        )
         print(f"  X_train_norm mean: {X_train_norm.mean():.2f}")
         print(f"  X_val_norm range: [{X_val_norm.min():.2f}, {X_val_norm.max():.2f}]")
-        print(f"  y_train_norm range: [{y_train_norm.min():.2f}, {y_train_norm.max():.2f}]")
+        print(
+            f"  y_train_norm range: [{y_train_norm.min():.2f}, {y_train_norm.max():.2f}]"
+        )
 
         # Test inverse transform
-        X_train_restored = result['X_scaler'].inverse_transform(X_train_norm)
+        X_train_restored = result["X_scaler"].inverse_transform(X_train_norm)
         diff = np.abs(X_train - X_train_restored).mean()
         print(f"  Inverse transform error: {diff:.6f}")
 

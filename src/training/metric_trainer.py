@@ -49,7 +49,7 @@ class MetricTrainer:
         self.model_type = config.model.model_type
 
         # Device setup
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Using device: {self.device}")
 
         # MLflow setup
@@ -57,8 +57,11 @@ class MetricTrainer:
         if use_mlflow:
             try:
                 import mlflow
+
                 mlflow.set_tracking_uri(config.training.tracking_uri)
-                mlflow.set_experiment(f"{config.training.experiment_name}-{self.metric_name}")
+                mlflow.set_experiment(
+                    f"{config.training.experiment_name}-{self.metric_name}"
+                )
                 self.mlflow = mlflow
             except ImportError:
                 print("MLflow not available, skipping tracking")
@@ -73,16 +76,21 @@ class MetricTrainer:
 
         # Training state
         self.current_epoch = 0
-        self.best_val_loss = float('inf')
+        self.best_val_loss = float("inf")
         self.training_history = {
-            'train_loss': [],
-            'val_loss': [],
+            "train_loss": [],
+            "val_loss": [],
         }
 
-    def prepare_data(self, X_train: np.ndarray, y_train_dict: Dict[int, np.ndarray],
-                    X_val: np.ndarray, y_val_dict: Dict[int, np.ndarray],
-                    X_test: Optional[np.ndarray] = None,
-                    y_test_dict: Optional[Dict[int, np.ndarray]] = None):
+    def prepare_data(
+        self,
+        X_train: np.ndarray,
+        y_train_dict: Dict[int, np.ndarray],
+        X_val: np.ndarray,
+        y_val_dict: Dict[int, np.ndarray],
+        X_test: Optional[np.ndarray] = None,
+        y_test_dict: Optional[Dict[int, np.ndarray]] = None,
+    ):
         """
         Prepare and normalize data for training.
 
@@ -105,11 +113,19 @@ class MetricTrainer:
         y_val_norm_dict = {}
 
         for horizon in y_train_dict.keys():
-            self.y_scaler[horizon] = TimeSeriesNormalizer(method=self.config.data.normalization)
-            y_train_norm_dict[horizon] = self.y_scaler[horizon].fit_transform(
-                y_train_dict[horizon].reshape(-1, 1)).reshape(y_train_dict[horizon].shape)
-            y_val_norm_dict[horizon] = self.y_scaler[horizon].transform(
-                y_val_dict[horizon].reshape(-1, 1)).reshape(y_val_dict[horizon].shape)
+            self.y_scaler[horizon] = TimeSeriesNormalizer(
+                method=self.config.data.normalization
+            )
+            y_train_norm_dict[horizon] = (
+                self.y_scaler[horizon]
+                .fit_transform(y_train_dict[horizon].reshape(-1, 1))
+                .reshape(y_train_dict[horizon].shape)
+            )
+            y_val_norm_dict[horizon] = (
+                self.y_scaler[horizon]
+                .transform(y_val_dict[horizon].reshape(-1, 1))
+                .reshape(y_val_dict[horizon].shape)
+            )
 
         # Store for later use
         self.X_train = X_train_norm
@@ -121,14 +137,17 @@ class MetricTrainer:
             self.X_test = self.X_scaler.transform(X_test)
             self.y_test_dict = {}
             for horizon in y_test_dict.keys():
-                self.y_test_dict[horizon] = self.y_scaler[horizon].transform(
-                    y_test_dict[horizon].reshape(-1, 1)).reshape(y_test_dict[horizon].shape)
+                self.y_test_dict[horizon] = (
+                    self.y_scaler[horizon]
+                    .transform(y_test_dict[horizon].reshape(-1, 1))
+                    .reshape(y_test_dict[horizon].shape)
+                )
 
         print("  Data normalization complete!")
 
     def build_model(self):
         """Build model based on configuration."""
-        if self.model_type == 'lstm':
+        if self.model_type == "lstm":
             # Update config with data dimensions
             self.config.model.input_size = self.X_train.shape[2]  # Number of features
             self.config.model.prediction_horizons = self.config.data.prediction_horizons
@@ -138,32 +157,34 @@ class MetricTrainer:
             self.model.to(self.device)
 
             # Setup optimizer
-            if self.config.training.optimizer == 'adam':
+            if self.config.training.optimizer == "adam":
                 self.optimizer = optim.Adam(
                     self.model.parameters(),
                     lr=self.config.training.learning_rate,
-                    weight_decay=self.config.training.weight_decay
+                    weight_decay=self.config.training.weight_decay,
                 )
-            elif self.config.training.optimizer == 'sgd':
+            elif self.config.training.optimizer == "sgd":
                 self.optimizer = optim.SGD(
                     self.model.parameters(),
                     lr=self.config.training.learning_rate,
                     weight_decay=self.config.training.weight_decay,
-                    momentum=0.9
+                    momentum=0.9,
                 )
 
             # Setup loss function
             self.loss_fn = MultiHorizonLoss(
                 horizon_weights=self.config.training.horizon_weights,
-                base_loss=self.config.training.loss_function
+                base_loss=self.config.training.loss_function,
             )
 
             print(f"\nModel: LSTM")
-            print(f"  Parameters: {self.model.get_model_info()['trainable_parameters']:,}")
+            print(
+                f"  Parameters: {self.model.get_model_info()['trainable_parameters']:,}"
+            )
 
-        elif self.model_type in ['arima', 'prophet']:
+        elif self.model_type in ["arima", "prophet"]:
             # Statistical models - different training approach
-            if self.model_type == 'arima':
+            if self.model_type == "arima":
                 self.model = ARIMAPredictor(self.config.model.__dict__)
             else:  # prophet
                 self.model = ProphetPredictor(self.config.model.__dict__)
@@ -245,27 +266,28 @@ class MetricTrainer:
 
         # Create data loaders
         train_loader, val_loader = create_data_loaders(
-            self.X_train, self.y_train_dict,
-            self.X_val, self.y_val_dict,
+            self.X_train,
+            self.y_train_dict,
+            self.X_val,
+            self.y_val_dict,
             batch_size=self.config.training.batch_size,
-            num_workers=self.config.training.num_workers
+            num_workers=self.config.training.num_workers,
         )
 
         # Setup callbacks
         early_stop = EarlyStopping(
             patience=self.config.training.patience,
             min_delta=self.config.training.min_delta,
-            mode='min'
+            mode="min",
         )
 
         checkpoint = ModelCheckpoint(
             checkpoint_dir=os.path.join(
-                self.config.training.checkpoint_dir,
-                self.metric_name
+                self.config.training.checkpoint_dir, self.metric_name
             ),
-            metric_name='val_loss',
-            mode='min',
-            save_every=self.config.training.save_every_n_epochs
+            metric_name="val_loss",
+            mode="min",
+            save_every=self.config.training.save_every_n_epochs,
         )
 
         # Start MLflow run
@@ -284,15 +306,18 @@ class MetricTrainer:
             val_loss = self.validate(val_loader)
 
             # Record history
-            self.training_history['train_loss'].append(train_loss)
-            self.training_history['val_loss'].append(val_loss)
+            self.training_history["train_loss"].append(train_loss)
+            self.training_history["val_loss"].append(val_loss)
 
             # Log to MLflow
             if self.use_mlflow:
-                self.mlflow.log_metrics({
-                    'train_loss': train_loss,
-                    'val_loss': val_loss,
-                }, step=epoch)
+                self.mlflow.log_metrics(
+                    {
+                        "train_loss": train_loss,
+                        "val_loss": val_loss,
+                    },
+                    step=epoch,
+                )
 
             # Print progress
             if epoch % self.config.training.log_interval == 0 or epoch == 0:
@@ -301,11 +326,17 @@ class MetricTrainer:
                 print(f"  Val Loss: {val_loss:.6f}")
 
             # Checkpoint
-            checkpoint(self.model, self.optimizer, epoch, val_loss, additional_info={
-                'X_scaler': self.X_scaler,
-                'y_scaler': self.y_scaler,
-                'config': self.config,
-            })
+            checkpoint(
+                self.model,
+                self.optimizer,
+                epoch,
+                val_loss,
+                additional_info={
+                    "X_scaler": self.X_scaler,
+                    "y_scaler": self.y_scaler,
+                    "config": self.config,
+                },
+            )
 
             # Early stopping
             if early_stop(val_loss, epoch):
@@ -339,12 +370,10 @@ class MetricTrainer:
 
         # Fit model
         print(f"\nFitting {self.model_type} model...")
-        if self.model_type == 'prophet':
+        if self.model_type == "prophet":
             # Prophet needs timestamps
             timestamps = pd.date_range(
-                start='2024-01-01',
-                periods=len(y_sequence),
-                freq='15S'
+                start="2024-01-01", periods=len(y_sequence), freq="15S"
             )
             self.model.fit(y_sequence, timestamps=timestamps)
         else:  # ARIMA
@@ -355,7 +384,7 @@ class MetricTrainer:
         # Save model
         save_dir = os.path.join(self.config.training.checkpoint_dir, self.metric_name)
         os.makedirs(save_dir, exist_ok=True)
-        save_path = os.path.join(save_dir, f'{self.model_type}_model.pkl')
+        save_path = os.path.join(save_dir, f"{self.model_type}_model.pkl")
         self.model.save_model(save_path)
         print(f"Model saved to {save_path}")
 
@@ -363,13 +392,14 @@ class MetricTrainer:
         """Main training entry point."""
         self.build_model()
 
-        if self.model_type == 'lstm':
+        if self.model_type == "lstm":
             self.train_lstm()
         else:
             self.train_statistical()
 
-    def evaluate(self, X_test: Optional[np.ndarray] = None,
-                y_test_dict: Optional[Dict] = None) -> Dict:
+    def evaluate(
+        self, X_test: Optional[np.ndarray] = None, y_test_dict: Optional[Dict] = None
+    ) -> Dict:
         """
         Evaluate trained model.
 
@@ -388,7 +418,7 @@ class MetricTrainer:
         print(f"Evaluating {self.model_type.upper()} on {self.metric_name}")
         print(f"{'='*60}")
 
-        if self.model_type == 'lstm':
+        if self.model_type == "lstm":
             # LSTM evaluation
             self.model.eval()
             with torch.no_grad():
@@ -398,10 +428,16 @@ class MetricTrainer:
 
             # Denormalize predictions
             for horizon in y_pred_dict.keys():
-                y_pred_dict[horizon] = self.y_scaler[horizon].inverse_transform(
-                    y_pred_dict[horizon].reshape(-1, 1)).reshape(y_pred_dict[horizon].shape)
-                y_test_dict[horizon] = self.y_scaler[horizon].inverse_transform(
-                    y_test_dict[horizon].reshape(-1, 1)).reshape(y_test_dict[horizon].shape)
+                y_pred_dict[horizon] = (
+                    self.y_scaler[horizon]
+                    .inverse_transform(y_pred_dict[horizon].reshape(-1, 1))
+                    .reshape(y_pred_dict[horizon].shape)
+                )
+                y_test_dict[horizon] = (
+                    self.y_scaler[horizon]
+                    .inverse_transform(y_test_dict[horizon].reshape(-1, 1))
+                    .reshape(y_test_dict[horizon].shape)
+                )
 
         else:
             # Statistical model evaluation
@@ -416,7 +452,7 @@ class MetricTrainer:
         return results
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Example usage
     from src.config.base_config import create_default_config
 
@@ -438,7 +474,7 @@ if __name__ == '__main__':
     y_test_dict = {h: np.random.randn(150, h) for h in horizons}
 
     # Create config
-    config = create_default_config('cpu', model_type='lstm')
+    config = create_default_config("cpu", model_type="lstm")
     config.training.epochs = 5  # Quick test
     config.training.batch_size = 32
 

@@ -21,8 +21,12 @@ class SingleMetricPredictor:
     Predictor for a single metric with model loading and inference.
     """
 
-    def __init__(self, metric_name: str, model_type: str = 'lstm',
-                 checkpoint_dir: str = 'experiments/checkpoints'):
+    def __init__(
+        self,
+        metric_name: str,
+        model_type: str = "lstm",
+        checkpoint_dir: str = "experiments/checkpoints",
+    ):
         """
         Initialize predictor.
 
@@ -39,22 +43,22 @@ class SingleMetricPredictor:
         self.X_scaler = None
         self.y_scaler = {}
         self.config = None
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self._load_model()
 
     def _load_model(self):
         """Load trained model from checkpoint."""
-        if self.model_type == 'lstm':
+        if self.model_type == "lstm":
             self._load_lstm()
-        elif self.model_type in ['arima', 'prophet']:
+        elif self.model_type in ["arima", "prophet"]:
             self._load_statistical()
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
 
     def _load_lstm(self):
         """Load LSTM model from checkpoint."""
-        checkpoint_path = os.path.join(self.checkpoint_dir, 'best_model.pth')
+        checkpoint_path = os.path.join(self.checkpoint_dir, "best_model.pth")
 
         if not os.path.exists(checkpoint_path):
             raise FileNotFoundError(f"No checkpoint found at {checkpoint_path}")
@@ -63,31 +67,31 @@ class SingleMetricPredictor:
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
 
         # Load config
-        self.config = checkpoint.get('config')
+        self.config = checkpoint.get("config")
 
         # Initialize model
         self.model = LSTMPredictor(self.config.model)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.model.load_state_dict(checkpoint["model_state_dict"])
         self.model.to(self.device)
         self.model.eval()
 
         # Load scalers
-        self.X_scaler = checkpoint.get('X_scaler')
-        self.y_scaler = checkpoint.get('y_scaler', {})
+        self.X_scaler = checkpoint.get("X_scaler")
+        self.y_scaler = checkpoint.get("y_scaler", {})
 
         print(f"  Model loaded successfully")
         print(f"  Best validation loss: {checkpoint.get('val_loss', 'N/A')}")
 
     def _load_statistical(self):
         """Load statistical model (ARIMA or Prophet)."""
-        model_path = os.path.join(self.checkpoint_dir, f'{self.model_type}_model.pkl')
+        model_path = os.path.join(self.checkpoint_dir, f"{self.model_type}_model.pkl")
 
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"No model found at {model_path}")
 
         print(f"Loading {self.model_type.upper()} model from {model_path}")
 
-        if self.model_type == 'arima':
+        if self.model_type == "arima":
             self.model = ARIMAPredictor.load_model(model_path)
         else:  # prophet
             self.model = ProphetPredictor.load_model(model_path)
@@ -105,7 +109,7 @@ class SingleMetricPredictor:
         Returns:
             Predictions of shape (n_samples, horizon)
         """
-        if self.model_type == 'lstm':
+        if self.model_type == "lstm":
             return self._predict_lstm(X, horizon)
         else:
             return self._predict_statistical(X, horizon)
@@ -128,9 +132,11 @@ class SingleMetricPredictor:
 
         # Denormalize
         if horizon in self.y_scaler:
-            predictions_np = self.y_scaler[horizon].inverse_transform(
-                predictions_np.reshape(-1, 1)
-            ).reshape(predictions_np.shape)
+            predictions_np = (
+                self.y_scaler[horizon]
+                .inverse_transform(predictions_np.reshape(-1, 1))
+                .reshape(predictions_np.shape)
+            )
 
         return predictions_np
 
@@ -162,7 +168,7 @@ class SingleMetricPredictor:
         Returns:
             Dict mapping horizon to predictions
         """
-        if self.model_type == 'lstm':
+        if self.model_type == "lstm":
             # LSTM can predict all horizons at once
             horizons = self.config.data.prediction_horizons
 
@@ -172,14 +178,18 @@ class SingleMetricPredictor:
 
             with torch.no_grad():
                 predictions_dict = self.model.predict_all_horizons(X_tensor)
-                predictions_np = {h: pred.cpu().numpy() for h, pred in predictions_dict.items()}
+                predictions_np = {
+                    h: pred.cpu().numpy() for h, pred in predictions_dict.items()
+                }
 
             # Denormalize
             for h in predictions_np.keys():
                 if h in self.y_scaler:
-                    predictions_np[h] = self.y_scaler[h].inverse_transform(
-                        predictions_np[h].reshape(-1, 1)
-                    ).reshape(predictions_np[h].shape)
+                    predictions_np[h] = (
+                        self.y_scaler[h]
+                        .inverse_transform(predictions_np[h].reshape(-1, 1))
+                        .reshape(predictions_np[h].shape)
+                    )
 
             return predictions_np
         else:
@@ -195,7 +205,7 @@ class MultiMetricPredictor:
     Allows predicting all container metrics at once.
     """
 
-    def __init__(self, checkpoint_dir: str = 'experiments/checkpoints'):
+    def __init__(self, checkpoint_dir: str = "experiments/checkpoints"):
         """
         Initialize multi-metric predictor.
 
@@ -205,7 +215,7 @@ class MultiMetricPredictor:
         self.checkpoint_dir = checkpoint_dir
         self.predictors = {}
 
-    def load_metric(self, metric_name: str, model_type: str = 'lstm'):
+    def load_metric(self, metric_name: str, model_type: str = "lstm"):
         """
         Load a specific metric's model.
 
@@ -217,21 +227,28 @@ class MultiMetricPredictor:
             predictor = SingleMetricPredictor(
                 metric_name=metric_name,
                 model_type=model_type,
-                checkpoint_dir=self.checkpoint_dir
+                checkpoint_dir=self.checkpoint_dir,
             )
             self.predictors[metric_name] = predictor
             print(f"Loaded {metric_name} predictor")
         except Exception as e:
             print(f"Failed to load {metric_name}: {e}")
 
-    def load_all_metrics(self, model_type: str = 'lstm'):
+    def load_all_metrics(self, model_type: str = "lstm"):
         """
         Load models for all available metrics.
 
         Args:
             model_type: Model type to use for all metrics
         """
-        metrics = ['cpu', 'memory', 'disk_reads', 'disk_writes', 'network_rx', 'network_tx']
+        metrics = [
+            "cpu",
+            "memory",
+            "disk_reads",
+            "disk_writes",
+            "network_rx",
+            "network_tx",
+        ]
 
         for metric in metrics:
             self.load_metric(metric, model_type)
@@ -253,8 +270,9 @@ class MultiMetricPredictor:
 
         return self.predictors[metric_name].predict(X, horizon)
 
-    def predict_all_metrics(self, X_dict: Dict[str, np.ndarray],
-                          horizon: int = 60) -> Dict[str, np.ndarray]:
+    def predict_all_metrics(
+        self, X_dict: Dict[str, np.ndarray], horizon: int = 60
+    ) -> Dict[str, np.ndarray]:
         """
         Predict for all loaded metrics.
 
@@ -269,12 +287,14 @@ class MultiMetricPredictor:
 
         for metric_name in self.predictors.keys():
             if metric_name in X_dict:
-                predictions[metric_name] = self.predict(metric_name, X_dict[metric_name], horizon)
+                predictions[metric_name] = self.predict(
+                    metric_name, X_dict[metric_name], horizon
+                )
 
         return predictions
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Test predictor
     print("Multi-Metric Predictor")
     print("=" * 60)
@@ -286,10 +306,13 @@ if __name__ == '__main__':
     predictor = MultiMetricPredictor()
 
     # Check what models are available
-    checkpoint_dir = 'experiments/checkpoints'
+    checkpoint_dir = "experiments/checkpoints"
     if os.path.exists(checkpoint_dir):
-        available_metrics = [d for d in os.listdir(checkpoint_dir)
-                           if os.path.isdir(os.path.join(checkpoint_dir, d))]
+        available_metrics = [
+            d
+            for d in os.listdir(checkpoint_dir)
+            if os.path.isdir(os.path.join(checkpoint_dir, d))
+        ]
         print(f"\nAvailable trained models: {available_metrics}")
 
         if available_metrics:
@@ -298,7 +321,7 @@ if __name__ == '__main__':
             print(f"\nTesting with {metric} model...")
 
             try:
-                predictor.load_metric(metric, model_type='lstm')
+                predictor.load_metric(metric, model_type="lstm")
 
                 # Create dummy input
                 window_size = 240

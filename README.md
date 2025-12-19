@@ -147,8 +147,7 @@ python -c "import src.models; import src.preprocessing; print('✓ Installation 
 ### 1. Collect Metrics Data
 
 ```bash
-cd scripts
-python export_metrics_simple.py --seconds 3600  # 1 hour of data
+python scripts/exporters/export_metrics_targeted.py --seconds 3600  # 1 hour of data
 ```
 
 This creates a CSV file in `data/raw/metrics_YYYYMMDD_HHMMSS.csv`.

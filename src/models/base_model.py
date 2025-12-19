@@ -25,8 +25,8 @@ class BaseTimeSeriesModel(ABC, nn.Module):
         """
         super().__init__()
         self.config = config
-        self.input_size = getattr(config, 'input_size', 1)
-        self.output_size = getattr(config, 'output_size', 1)
+        self.input_size = getattr(config, "input_size", 1)
+        self.output_size = getattr(config, "output_size", 1)
 
     @abstractmethod
     def forward(self, x):
@@ -65,11 +65,15 @@ class BaseTimeSeriesModel(ABC, nn.Module):
         total_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
 
         return {
-            'architecture': self.__class__.__name__,
-            'config': self.config.__dict__ if hasattr(self.config, '__dict__') else str(self.config),
-            'trainable_parameters': total_params,
-            'input_size': self.input_size,
-            'output_size': self.output_size,
+            "architecture": self.__class__.__name__,
+            "config": (
+                self.config.__dict__
+                if hasattr(self.config, "__dict__")
+                else str(self.config)
+            ),
+            "trainable_parameters": total_params,
+            "input_size": self.input_size,
+            "output_size": self.output_size,
         }
 
     def save_model(self, path: str, additional_info: Optional[Dict] = None):
@@ -83,9 +87,9 @@ class BaseTimeSeriesModel(ABC, nn.Module):
         import torch
 
         checkpoint = {
-            'model_state_dict': self.state_dict(),
-            'model_info': self.get_model_info(),
-            'config': self.config,
+            "model_state_dict": self.state_dict(),
+            "model_info": self.get_model_info(),
+            "config": self.config,
         }
 
         if additional_info:
@@ -94,7 +98,7 @@ class BaseTimeSeriesModel(ABC, nn.Module):
         torch.save(checkpoint, path)
 
     @classmethod
-    def load_model(cls, path: str, map_location: str = 'cpu'):
+    def load_model(cls, path: str, map_location: str = "cpu"):
         """
         Load model from checkpoint.
 
@@ -108,15 +112,18 @@ class BaseTimeSeriesModel(ABC, nn.Module):
         import torch
 
         checkpoint = torch.load(path, map_location=map_location)
-        config = checkpoint['config']
+        config = checkpoint["config"]
 
         # Instantiate model
         model = cls(config)
-        model.load_state_dict(checkpoint['model_state_dict'])
+        model.load_state_dict(checkpoint["model_state_dict"])
 
         # Return model and additional info
-        additional_info = {k: v for k, v in checkpoint.items()
-                          if k not in ['model_state_dict', 'model_info', 'config']}
+        additional_info = {
+            k: v
+            for k, v in checkpoint.items()
+            if k not in ["model_state_dict", "model_info", "config"]
+        }
 
         return model, additional_info
 
@@ -171,9 +178,11 @@ class StatisticalBaseModel(ABC):
             Dictionary with model information
         """
         return {
-            'architecture': self.__class__.__name__,
-            'config': self.config if isinstance(self.config, dict) else str(self.config),
-            'is_fitted': self.is_fitted,
+            "architecture": self.__class__.__name__,
+            "config": (
+                self.config if isinstance(self.config, dict) else str(self.config)
+            ),
+            "is_fitted": self.is_fitted,
         }
 
     def save_model(self, path: str):
@@ -185,12 +194,15 @@ class StatisticalBaseModel(ABC):
         """
         import pickle
 
-        with open(path, 'wb') as f:
-            pickle.dump({
-                'model': self.model,
-                'config': self.config,
-                'is_fitted': self.is_fitted,
-            }, f)
+        with open(path, "wb") as f:
+            pickle.dump(
+                {
+                    "model": self.model,
+                    "config": self.config,
+                    "is_fitted": self.is_fitted,
+                },
+                f,
+            )
 
     @classmethod
     def load_model(cls, path: str):
@@ -205,11 +217,11 @@ class StatisticalBaseModel(ABC):
         """
         import pickle
 
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             data = pickle.load(f)
 
-        model_instance = cls(data['config'])
-        model_instance.model = data['model']
-        model_instance.is_fitted = data['is_fitted']
+        model_instance = cls(data["config"])
+        model_instance.model = data["model"]
+        model_instance.is_fitted = data["is_fitted"]
 
         return model_instance

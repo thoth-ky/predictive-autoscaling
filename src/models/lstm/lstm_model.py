@@ -33,7 +33,7 @@ class LSTMPredictor(BaseTimeSeriesModel):
         self.num_layers = config.num_layers
         self.dropout = config.dropout
         self.bidirectional = config.bidirectional
-        self.prediction_horizons = getattr(config, 'prediction_horizons', [20, 60, 120])
+        self.prediction_horizons = getattr(config, "prediction_horizons", [20, 60, 120])
 
         # LSTM layers
         self.lstm = nn.LSTM(
@@ -42,7 +42,7 @@ class LSTMPredictor(BaseTimeSeriesModel):
             num_layers=self.num_layers,
             dropout=self.dropout if self.num_layers > 1 else 0,
             batch_first=True,
-            bidirectional=self.bidirectional
+            bidirectional=self.bidirectional,
         )
 
         # Calculate LSTM output size
@@ -53,15 +53,17 @@ class LSTMPredictor(BaseTimeSeriesModel):
 
         # Multi-horizon prediction heads
         # Each horizon gets its own linear layer for prediction
-        self.prediction_heads = nn.ModuleDict({
-            f'horizon_{h}': nn.Sequential(
-                nn.Linear(lstm_output_size, lstm_output_size // 2),
-                nn.ReLU(),
-                nn.Dropout(self.dropout),
-                nn.Linear(lstm_output_size // 2, h)
-            )
-            for h in self.prediction_horizons
-        })
+        self.prediction_heads = nn.ModuleDict(
+            {
+                f"horizon_{h}": nn.Sequential(
+                    nn.Linear(lstm_output_size, lstm_output_size // 2),
+                    nn.ReLU(),
+                    nn.Dropout(self.dropout),
+                    nn.Linear(lstm_output_size // 2, h),
+                )
+                for h in self.prediction_horizons
+            }
+        )
 
     def forward(self, x):
         """
@@ -97,14 +99,16 @@ class LSTMPredictor(BaseTimeSeriesModel):
             Predictions of shape (batch_size, horizon)
         """
         if horizon not in self.prediction_horizons:
-            raise ValueError(f"Horizon {horizon} not in configured horizons: "
-                           f"{self.prediction_horizons}")
+            raise ValueError(
+                f"Horizon {horizon} not in configured horizons: "
+                f"{self.prediction_horizons}"
+            )
 
         # Get LSTM features
         features = self.forward(x)
 
         # Apply horizon-specific prediction head
-        predictions = self.prediction_heads[f'horizon_{horizon}'](features)
+        predictions = self.prediction_heads[f"horizon_{horizon}"](features)
 
         return predictions
 
@@ -125,7 +129,7 @@ class LSTMPredictor(BaseTimeSeriesModel):
         # Apply each prediction head
         predictions = {}
         for horizon in self.prediction_horizons:
-            predictions[horizon] = self.prediction_heads[f'horizon_{horizon}'](features)
+            predictions[horizon] = self.prediction_heads[f"horizon_{horizon}"](features)
 
         return predictions
 
@@ -159,7 +163,7 @@ class SimpleLSTM(BaseTimeSeriesModel):
             num_layers=self.num_layers,
             dropout=self.dropout if self.num_layers > 1 else 0,
             batch_first=True,
-            bidirectional=self.bidirectional
+            bidirectional=self.bidirectional,
         )
 
         # Prediction head
@@ -206,14 +210,14 @@ def create_lstm_model(config) -> BaseTimeSeriesModel:
         LSTM model instance
     """
     # Check if multi-horizon prediction is needed
-    if hasattr(config, 'prediction_horizons') and len(config.prediction_horizons) > 1:
+    if hasattr(config, "prediction_horizons") and len(config.prediction_horizons) > 1:
         return LSTMPredictor(config)
     else:
-        horizon = getattr(config, 'prediction_horizon', 60)
+        horizon = getattr(config, "prediction_horizon", 60)
         return SimpleLSTM(config, prediction_horizon=horizon)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Example usage and testing
     from src.config.base_config import ModelConfig, DataConfig
 
@@ -222,17 +226,15 @@ if __name__ == '__main__':
 
     # Create config
     model_config = ModelConfig(
-        model_type='lstm',
+        model_type="lstm",
         input_size=8,  # e.g., value + 7 features
         hidden_size=64,
         num_layers=2,
         dropout=0.3,
-        bidirectional=True
+        bidirectional=True,
     )
 
-    data_config = DataConfig(
-        prediction_horizons=[20, 60, 120]  # 5, 15, 30 minutes
-    )
+    data_config = DataConfig(prediction_horizons=[20, 60, 120])  # 5, 15, 30 minutes
 
     # Add horizons to model config
     model_config.prediction_horizons = data_config.prediction_horizons

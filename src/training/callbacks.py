@@ -16,8 +16,13 @@ class EarlyStopping:
     Monitors validation loss and stops training if no improvement for N epochs.
     """
 
-    def __init__(self, patience: int = 15, min_delta: float = 1e-4,
-                 mode: str = 'min', verbose: bool = True):
+    def __init__(
+        self,
+        patience: int = 15,
+        min_delta: float = 1e-4,
+        mode: str = "min",
+        verbose: bool = True,
+    ):
         """
         Initialize early stopping.
 
@@ -38,7 +43,7 @@ class EarlyStopping:
         self.best_epoch = 0
 
         # Set comparison function
-        if mode == 'min':
+        if mode == "min":
             self.is_better = lambda current, best: current < best - min_delta
             self.best_score = np.inf
         else:  # mode == 'max'
@@ -59,7 +64,9 @@ class EarlyStopping:
         if self.is_better(current_score, self.best_score):
             # Improvement
             if self.verbose:
-                print(f"  Validation improved from {self.best_score:.6f} to {current_score:.6f}")
+                print(
+                    f"  Validation improved from {self.best_score:.6f} to {current_score:.6f}"
+                )
 
             self.best_score = current_score
             self.best_epoch = epoch
@@ -70,14 +77,18 @@ class EarlyStopping:
             self.counter += 1
 
             if self.verbose and self.counter > 0:
-                print(f"  No improvement for {self.counter} epoch(s) "
-                      f"(patience: {self.patience})")
+                print(
+                    f"  No improvement for {self.counter} epoch(s) "
+                    f"(patience: {self.patience})"
+                )
 
             if self.counter >= self.patience:
                 self.early_stop = True
                 if self.verbose:
                     print(f"\n  Early stopping triggered after {epoch+1} epochs")
-                    print(f"  Best score: {self.best_score:.6f} at epoch {self.best_epoch+1}")
+                    print(
+                        f"  Best score: {self.best_score:.6f} at epoch {self.best_epoch+1}"
+                    )
                 return True
 
         return False
@@ -90,9 +101,14 @@ class ModelCheckpoint:
     Saves best model based on validation metric, and optionally saves periodic checkpoints.
     """
 
-    def __init__(self, checkpoint_dir: str, metric_name: str = 'loss',
-                 mode: str = 'min', save_every: Optional[int] = None,
-                 verbose: bool = True):
+    def __init__(
+        self,
+        checkpoint_dir: str,
+        metric_name: str = "loss",
+        mode: str = "min",
+        save_every: Optional[int] = None,
+        verbose: bool = True,
+    ):
         """
         Initialize checkpoint callback.
 
@@ -112,7 +128,7 @@ class ModelCheckpoint:
         os.makedirs(checkpoint_dir, exist_ok=True)
 
         # Set comparison function
-        if mode == 'min':
+        if mode == "min":
             self.is_better = lambda current, best: current < best
             self.best_score = np.inf
         else:
@@ -121,8 +137,14 @@ class ModelCheckpoint:
 
         self.best_epoch = 0
 
-    def __call__(self, model, optimizer, epoch: int, current_score: float,
-                 additional_info: Optional[dict] = None):
+    def __call__(
+        self,
+        model,
+        optimizer,
+        epoch: int,
+        current_score: float,
+        additional_info: Optional[dict] = None,
+    ):
         """
         Save checkpoint if needed.
 
@@ -139,32 +161,43 @@ class ModelCheckpoint:
             self.best_epoch = epoch
 
             # Save best model
-            best_path = os.path.join(self.checkpoint_dir, 'best_model.pth')
-            self._save_checkpoint(best_path, model, optimizer, epoch,
-                                current_score, additional_info)
+            best_path = os.path.join(self.checkpoint_dir, "best_model.pth")
+            self._save_checkpoint(
+                best_path, model, optimizer, epoch, current_score, additional_info
+            )
 
             if self.verbose:
                 print(f"  Saved best model to {best_path}")
 
         # Periodic checkpoint
         if self.save_every is not None and (epoch + 1) % self.save_every == 0:
-            periodic_path = os.path.join(self.checkpoint_dir, f'checkpoint_epoch_{epoch+1}.pth')
-            self._save_checkpoint(periodic_path, model, optimizer, epoch,
-                                current_score, additional_info)
+            periodic_path = os.path.join(
+                self.checkpoint_dir, f"checkpoint_epoch_{epoch+1}.pth"
+            )
+            self._save_checkpoint(
+                periodic_path, model, optimizer, epoch, current_score, additional_info
+            )
 
             if self.verbose:
                 print(f"  Saved periodic checkpoint to {periodic_path}")
 
-    def _save_checkpoint(self, path: str, model, optimizer, epoch: int,
-                        score: float, additional_info: Optional[dict] = None):
+    def _save_checkpoint(
+        self,
+        path: str,
+        model,
+        optimizer,
+        epoch: int,
+        score: float,
+        additional_info: Optional[dict] = None,
+    ):
         """Save checkpoint to file."""
         checkpoint = {
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            f'{self.metric_name}': score,
-            'best_score': self.best_score,
-            'best_epoch': self.best_epoch,
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            f"{self.metric_name}": score,
+            "best_score": self.best_score,
+            "best_epoch": self.best_epoch,
         }
 
         if additional_info:
@@ -183,16 +216,16 @@ class ModelCheckpoint:
         Returns:
             Loaded checkpoint dict
         """
-        best_path = os.path.join(self.checkpoint_dir, 'best_model.pth')
+        best_path = os.path.join(self.checkpoint_dir, "best_model.pth")
 
         if not os.path.exists(best_path):
             raise FileNotFoundError(f"No best model found at {best_path}")
 
         checkpoint = torch.load(best_path)
-        model.load_state_dict(checkpoint['model_state_dict'])
+        model.load_state_dict(checkpoint["model_state_dict"])
 
         if optimizer is not None:
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
         if self.verbose:
             print(f"Loaded best model from epoch {checkpoint['epoch']+1}")
@@ -206,8 +239,15 @@ class LearningRateScheduler:
     Reduce learning rate when validation metric plateaus.
     """
 
-    def __init__(self, optimizer, mode: str = 'min', factor: float = 0.5,
-                 patience: int = 10, min_lr: float = 1e-7, verbose: bool = True):
+    def __init__(
+        self,
+        optimizer,
+        mode: str = "min",
+        factor: float = 0.5,
+        patience: int = 10,
+        min_lr: float = 1e-7,
+        verbose: bool = True,
+    ):
         """
         Initialize LR scheduler.
 
@@ -227,9 +267,12 @@ class LearningRateScheduler:
         self.verbose = verbose
 
         self.counter = 0
-        self.best_score = np.inf if mode == 'min' else -np.inf
-        self.is_better = (lambda current, best: current < best) if mode == 'min' \
-                        else (lambda current, best: current > best)
+        self.best_score = np.inf if mode == "min" else -np.inf
+        self.is_better = (
+            (lambda current, best: current < best)
+            if mode == "min"
+            else (lambda current, best: current > best)
+        )
 
     def __call__(self, current_score: float, epoch: int):
         """
@@ -252,23 +295,23 @@ class LearningRateScheduler:
     def _reduce_lr(self):
         """Reduce learning rate."""
         for param_group in self.optimizer.param_groups:
-            old_lr = param_group['lr']
+            old_lr = param_group["lr"]
             new_lr = max(old_lr * self.factor, self.min_lr)
 
             if new_lr < old_lr:
-                param_group['lr'] = new_lr
+                param_group["lr"] = new_lr
                 if self.verbose:
                     print(f"\n  Reducing learning rate: {old_lr:.2e} -> {new_lr:.2e}\n")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Test callbacks
     print("Training Callbacks")
     print("=" * 60)
 
     # Test Early Stopping
     print("\nTesting Early Stopping:")
-    early_stop = EarlyStopping(patience=3, min_delta=0.01, mode='min')
+    early_stop = EarlyStopping(patience=3, min_delta=0.01, mode="min")
 
     val_losses = [1.0, 0.95, 0.92, 0.91, 0.905, 0.904, 0.903]
 
@@ -285,10 +328,7 @@ if __name__ == '__main__':
 
     with tempfile.TemporaryDirectory() as tmpdir:
         checkpoint = ModelCheckpoint(
-            checkpoint_dir=tmpdir,
-            metric_name='val_loss',
-            mode='min',
-            save_every=2
+            checkpoint_dir=tmpdir, metric_name="val_loss", mode="min", save_every=2
         )
 
         # Create dummy model

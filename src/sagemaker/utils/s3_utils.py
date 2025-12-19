@@ -16,8 +16,9 @@ class S3DataManager:
     Manage data uploads/downloads to/from S3 for SageMaker training.
     """
 
-    def __init__(self, bucket_name: str = 'predictive-autoscaling',
-                 region: str = 'us-east-1'):
+    def __init__(
+        self, bucket_name: str = "predictive-autoscaling", region: str = "us-east-1"
+    ):
         """
         Initialize S3 manager.
 
@@ -27,8 +28,8 @@ class S3DataManager:
         """
         self.bucket_name = bucket_name
         self.region = region
-        self.s3_client = boto3.client('s3', region_name=region)
-        self.s3_resource = boto3.resource('s3', region_name=region)
+        self.s3_client = boto3.client("s3", region_name=region)
+        self.s3_resource = boto3.resource("s3", region_name=region)
 
     def create_bucket_if_not_exists(self):
         """Create S3 bucket if it doesn't exist."""
@@ -37,15 +38,15 @@ class S3DataManager:
             print(f"Bucket {self.bucket_name} already exists")
         except:
             print(f"Creating bucket {self.bucket_name}")
-            if self.region == 'us-east-1':
+            if self.region == "us-east-1":
                 self.s3_client.create_bucket(Bucket=self.bucket_name)
             else:
                 self.s3_client.create_bucket(
                     Bucket=self.bucket_name,
-                    CreateBucketConfiguration={'LocationConstraint': self.region}
+                    CreateBucketConfiguration={"LocationConstraint": self.region},
                 )
 
-    def upload_dataframe(self, df: pd.DataFrame, s3_path: str, format: str = 'csv'):
+    def upload_dataframe(self, df: pd.DataFrame, s3_path: str, format: str = "csv"):
         """
         Upload DataFrame to S3.
 
@@ -54,28 +55,24 @@ class S3DataManager:
             s3_path: S3 path (e.g., 'data/cpu/train/data.csv')
             format: Format ('csv' or 'parquet')
         """
-        if format == 'csv':
+        if format == "csv":
             csv_buffer = StringIO()
             df.to_csv(csv_buffer, index=False)
             self.s3_client.put_object(
-                Bucket=self.bucket_name,
-                Key=s3_path,
-                Body=csv_buffer.getvalue()
+                Bucket=self.bucket_name, Key=s3_path, Body=csv_buffer.getvalue()
             )
-        elif format == 'parquet':
+        elif format == "parquet":
             parquet_buffer = BytesIO()
             df.to_parquet(parquet_buffer, index=False)
             self.s3_client.put_object(
-                Bucket=self.bucket_name,
-                Key=s3_path,
-                Body=parquet_buffer.getvalue()
+                Bucket=self.bucket_name, Key=s3_path, Body=parquet_buffer.getvalue()
             )
         else:
             raise ValueError(f"Unknown format: {format}")
 
         print(f"Uploaded to s3://{self.bucket_name}/{s3_path}")
 
-    def download_dataframe(self, s3_path: str, format: str = 'csv') -> pd.DataFrame:
+    def download_dataframe(self, s3_path: str, format: str = "csv") -> pd.DataFrame:
         """
         Download DataFrame from S3.
 
@@ -88,10 +85,10 @@ class S3DataManager:
         """
         obj = self.s3_client.get_object(Bucket=self.bucket_name, Key=s3_path)
 
-        if format == 'csv':
-            return pd.read_csv(BytesIO(obj['Body'].read()))
-        elif format == 'parquet':
-            return pd.read_parquet(BytesIO(obj['Body'].read()))
+        if format == "csv":
+            return pd.read_csv(BytesIO(obj["Body"].read()))
+        elif format == "parquet":
+            return pd.read_parquet(BytesIO(obj["Body"].read()))
         else:
             raise ValueError(f"Unknown format: {format}")
 
@@ -108,9 +105,7 @@ class S3DataManager:
         buffer.seek(0)
 
         self.s3_client.put_object(
-            Bucket=self.bucket_name,
-            Key=s3_path,
-            Body=buffer.getvalue()
+            Bucket=self.bucket_name, Key=s3_path, Body=buffer.getvalue()
         )
 
         print(f"Uploaded array to s3://{self.bucket_name}/{s3_path}")
@@ -126,14 +121,19 @@ class S3DataManager:
             Numpy array
         """
         obj = self.s3_client.get_object(Bucket=self.bucket_name, Key=s3_path)
-        buffer = BytesIO(obj['Body'].read())
+        buffer = BytesIO(obj["Body"].read())
         return np.load(buffer)
 
-    def upload_training_data(self, metric_name: str,
-                            X_train: np.ndarray, y_train_dict: Dict[int, np.ndarray],
-                            X_val: np.ndarray, y_val_dict: Dict[int, np.ndarray],
-                            X_test: Optional[np.ndarray] = None,
-                            y_test_dict: Optional[Dict[int, np.ndarray]] = None):
+    def upload_training_data(
+        self,
+        metric_name: str,
+        X_train: np.ndarray,
+        y_train_dict: Dict[int, np.ndarray],
+        X_val: np.ndarray,
+        y_val_dict: Dict[int, np.ndarray],
+        X_test: Optional[np.ndarray] = None,
+        y_test_dict: Optional[Dict[int, np.ndarray]] = None,
+    ):
         """
         Upload complete training dataset to S3 in SageMaker format.
 
@@ -203,26 +203,29 @@ class S3DataManager:
         """
         prefix = f"data/{metric_name}/"
         response = self.s3_client.list_objects_v2(
-            Bucket=self.bucket_name,
-            Prefix=prefix
+            Bucket=self.bucket_name, Prefix=prefix
         )
 
-        if 'Contents' not in response:
+        if "Contents" not in response:
             return []
 
-        return [obj['Key'] for obj in response['Contents']]
+        return [obj["Key"] for obj in response["Contents"]]
 
     def get_s3_uri(self, s3_path: str) -> str:
         """Get full S3 URI."""
         return f"s3://{self.bucket_name}/{s3_path}"
 
 
-def prepare_data_for_sagemaker(metric_name: str,
-                               X_train: np.ndarray, y_train_dict: Dict,
-                               X_val: np.ndarray, y_val_dict: Dict,
-                               X_test: Optional[np.ndarray] = None,
-                               y_test_dict: Optional[Dict] = None,
-                               bucket_name: str = 'predictive-autoscaling') -> str:
+def prepare_data_for_sagemaker(
+    metric_name: str,
+    X_train: np.ndarray,
+    y_train_dict: Dict,
+    X_val: np.ndarray,
+    y_val_dict: Dict,
+    X_test: Optional[np.ndarray] = None,
+    y_test_dict: Optional[Dict] = None,
+    bucket_name: str = "predictive-autoscaling",
+) -> str:
     """
     Convenience function to upload data to S3 for SageMaker training.
 
@@ -240,12 +243,11 @@ def prepare_data_for_sagemaker(metric_name: str,
     manager.create_bucket_if_not_exists()
 
     return manager.upload_training_data(
-        metric_name, X_train, y_train_dict,
-        X_val, y_val_dict, X_test, y_test_dict
+        metric_name, X_train, y_train_dict, X_val, y_val_dict, X_test, y_test_dict
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Test S3 utilities
     print("S3 Utilities")
     print("=" * 60)
@@ -255,7 +257,8 @@ if __name__ == '__main__':
     print("Configure with: aws configure")
 
     print("\nExample usage:")
-    print("""
+    print(
+        """
 # Upload training data
 from src.sagemaker.utils.s3_utils import prepare_data_for_sagemaker
 
@@ -280,4 +283,5 @@ estimator.fit({
     'train': f'{s3_uri}train/',
     'validation': f'{s3_uri}validation/'
 })
-    """)
+    """
+    )

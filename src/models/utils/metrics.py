@@ -21,7 +21,7 @@ class ModelEvaluator:
     - Horizon degradation analysis
     """
 
-    def __init__(self, metric_name: str = 'unknown'):
+    def __init__(self, metric_name: str = "unknown"):
         """
         Initialize evaluator.
 
@@ -38,7 +38,9 @@ class ModelEvaluator:
         """Calculate Mean Absolute Error."""
         return mean_absolute_error(y_true.flatten(), y_pred.flatten())
 
-    def mape(self, y_true: np.ndarray, y_pred: np.ndarray, epsilon: float = 1e-10) -> float:
+    def mape(
+        self, y_true: np.ndarray, y_pred: np.ndarray, epsilon: float = 1e-10
+    ) -> float:
         """
         Calculate Mean Absolute Percentage Error.
 
@@ -58,7 +60,10 @@ class ModelEvaluator:
         if not mask.any():
             return 0.0
 
-        return np.mean(np.abs((y_true_flat[mask] - y_pred_flat[mask]) / y_true_flat[mask])) * 100
+        return (
+            np.mean(np.abs((y_true_flat[mask] - y_pred_flat[mask]) / y_true_flat[mask]))
+            * 100
+        )
 
     def r2(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
         """Calculate R² Score."""
@@ -90,8 +95,9 @@ class ModelEvaluator:
 
         return np.mean(same_direction) * 100
 
-    def compute_metrics(self, y_true: np.ndarray, y_pred: np.ndarray,
-                       horizon: Optional[int] = None) -> Dict[str, float]:
+    def compute_metrics(
+        self, y_true: np.ndarray, y_pred: np.ndarray, horizon: Optional[int] = None
+    ) -> Dict[str, float]:
         """
         Compute all metrics for a single prediction horizon.
 
@@ -104,24 +110,25 @@ class ModelEvaluator:
             Dictionary of metric names to values
         """
         metrics = {
-            'rmse': self.rmse(y_true, y_pred),
-            'mae': self.mae(y_true, y_pred),
-            'mape': self.mape(y_true, y_pred),
-            'r2_score': self.r2(y_true, y_pred),
+            "rmse": self.rmse(y_true, y_pred),
+            "mae": self.mae(y_true, y_pred),
+            "mape": self.mape(y_true, y_pred),
+            "r2_score": self.r2(y_true, y_pred),
         }
 
         # Add directional accuracy if multi-step predictions
         if y_true.ndim > 1 and y_true.shape[1] > 1:
-            metrics['directional_accuracy'] = self.directional_accuracy(y_true, y_pred)
+            metrics["directional_accuracy"] = self.directional_accuracy(y_true, y_pred)
 
         if horizon is not None:
             # Add horizon identifier to metric names
-            metrics = {f'{k}_h{horizon}': v for k, v in metrics.items()}
+            metrics = {f"{k}_h{horizon}": v for k, v in metrics.items()}
 
         return metrics
 
-    def horizon_analysis(self, y_true_dict: Dict[int, np.ndarray],
-                        y_pred_dict: Dict[int, np.ndarray]) -> Dict[str, any]:
+    def horizon_analysis(
+        self, y_true_dict: Dict[int, np.ndarray], y_pred_dict: Dict[int, np.ndarray]
+    ) -> Dict[str, any]:
         """
         Analyze performance across multiple prediction horizons.
 
@@ -134,8 +141,8 @@ class ModelEvaluator:
             Dictionary with per-horizon metrics and degradation analysis
         """
         results = {
-            'by_horizon': {},
-            'degradation': {},
+            "by_horizon": {},
+            "degradation": {},
         }
 
         # Compute metrics for each horizon
@@ -144,7 +151,7 @@ class ModelEvaluator:
             y_pred = y_pred_dict[horizon]
 
             horizon_minutes = horizon // 4  # Convert timesteps to minutes
-            results['by_horizon'][horizon_minutes] = self.compute_metrics(
+            results["by_horizon"][horizon_minutes] = self.compute_metrics(
                 y_true, y_pred, horizon=horizon_minutes
             )
 
@@ -159,9 +166,9 @@ class ModelEvaluator:
             rmse_values.append(self.rmse(y_true, y_pred))
             mae_values.append(self.mae(y_true, y_pred))
 
-        results['degradation']['horizons'] = [h // 4 for h in horizons_sorted]
-        results['degradation']['rmse_progression'] = rmse_values
-        results['degradation']['mae_progression'] = mae_values
+        results["degradation"]["horizons"] = [h // 4 for h in horizons_sorted]
+        results["degradation"]["rmse_progression"] = rmse_values
+        results["degradation"]["mae_progression"] = mae_values
 
         # Calculate degradation rate (error increase per minute)
         if len(horizons_sorted) > 1:
@@ -169,8 +176,8 @@ class ModelEvaluator:
             rmse_increase = (rmse_values[-1] - rmse_values[0]) / (h2 - h1)
             mae_increase = (mae_values[-1] - mae_values[0]) / (h2 - h1)
 
-            results['degradation']['rmse_per_minute'] = rmse_increase
-            results['degradation']['mae_per_minute'] = mae_increase
+            results["degradation"]["rmse_per_minute"] = rmse_increase
+            results["degradation"]["mae_per_minute"] = mae_increase
 
         return results
 
@@ -200,8 +207,9 @@ class ModelEvaluator:
 
         return np.array(errors)
 
-    def print_evaluation_report(self, y_true_dict: Dict[int, np.ndarray],
-                               y_pred_dict: Dict[int, np.ndarray]):
+    def print_evaluation_report(
+        self, y_true_dict: Dict[int, np.ndarray], y_pred_dict: Dict[int, np.ndarray]
+    ):
         """
         Print comprehensive evaluation report.
 
@@ -220,30 +228,41 @@ class ModelEvaluator:
         print(f"{'Horizon':<12} {'RMSE':<10} {'MAE':<10} {'MAPE':<10} {'R²':<10}")
         print("-" * 60)
 
-        for horizon_min in sorted(results['by_horizon'].keys()):
-            metrics = results['by_horizon'][horizon_min]
-            rmse_key = f'rmse_h{horizon_min}'
-            mae_key = f'mae_h{horizon_min}'
-            mape_key = f'mape_h{horizon_min}'
-            r2_key = f'r2_score_h{horizon_min}'
+        for horizon_min in sorted(results["by_horizon"].keys()):
+            metrics = results["by_horizon"][horizon_min]
+            rmse_key = f"rmse_h{horizon_min}"
+            mae_key = f"mae_h{horizon_min}"
+            mape_key = f"mape_h{horizon_min}"
+            r2_key = f"r2_score_h{horizon_min}"
 
-            print(f"{horizon_min:>3} min     "
-                  f"{metrics.get(rmse_key, 0):<10.4f} "
-                  f"{metrics.get(mae_key, 0):<10.4f} "
-                  f"{metrics.get(mape_key, 0):<10.2f} "
-                  f"{metrics.get(r2_key, 0):<10.4f}")
+            print(
+                f"{horizon_min:>3} min     "
+                f"{metrics.get(rmse_key, 0):<10.4f} "
+                f"{metrics.get(mae_key, 0):<10.4f} "
+                f"{metrics.get(mape_key, 0):<10.2f} "
+                f"{metrics.get(r2_key, 0):<10.4f}"
+            )
 
         # Print degradation analysis
-        if 'rmse_per_minute' in results['degradation']:
+        if "rmse_per_minute" in results["degradation"]:
             print("\nError Degradation:")
-            print(f"  RMSE increase per minute: {results['degradation']['rmse_per_minute']:.4f}")
-            print(f"  MAE increase per minute: {results['degradation']['mae_per_minute']:.4f}")
+            print(
+                f"  RMSE increase per minute: {results['degradation']['rmse_per_minute']:.4f}"
+            )
+            print(
+                f"  MAE increase per minute: {results['degradation']['mae_per_minute']:.4f}"
+            )
 
         print(f"\n{'='*60}\n")
 
 
-def evaluate_model(model, X_test: np.ndarray, y_test_dict: Dict[int, np.ndarray],
-                  metric_name: str = 'unknown', device: str = 'cpu') -> Dict:
+def evaluate_model(
+    model,
+    X_test: np.ndarray,
+    y_test_dict: Dict[int, np.ndarray],
+    metric_name: str = "unknown",
+    device: str = "cpu",
+) -> Dict:
     """
     Evaluate a trained model on test data.
 
@@ -281,7 +300,7 @@ def evaluate_model(model, X_test: np.ndarray, y_test_dict: Dict[int, np.ndarray]
     return results
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Test evaluation metrics
     print("Time Series Evaluation Metrics")
     print("=" * 60)
@@ -299,7 +318,7 @@ if __name__ == '__main__':
         y_pred_dict[h] = y_true_dict[h] + noise
 
     # Evaluate
-    evaluator = ModelEvaluator(metric_name='cpu')
+    evaluator = ModelEvaluator(metric_name="cpu")
     evaluator.print_evaluation_report(y_true_dict, y_pred_dict)
 
     # Test individual metrics
@@ -311,7 +330,9 @@ if __name__ == '__main__':
     print(f"  MAE: {evaluator.mae(y_true, y_pred):.4f}")
     print(f"  MAPE: {evaluator.mape(y_true, y_pred):.2f}%")
     print(f"  R²: {evaluator.r2(y_true, y_pred):.4f}")
-    print(f"  Directional Accuracy: {evaluator.directional_accuracy(y_true, y_pred):.2f}%")
+    print(
+        f"  Directional Accuracy: {evaluator.directional_accuracy(y_true, y_pred):.2f}%"
+    )
 
     # Test per-timestep error
     print("\nPer-Timestep Error (first 10 steps):")

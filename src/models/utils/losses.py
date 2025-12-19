@@ -15,8 +15,9 @@ class MultiHorizonLoss(nn.Module):
     Allows different importance for different horizons (e.g., prioritize 15-min over 30-min).
     """
 
-    def __init__(self, horizon_weights: Dict[int, float] = None,
-                 base_loss: str = 'mse'):
+    def __init__(
+        self, horizon_weights: Dict[int, float] = None, base_loss: str = "mse"
+    ):
         """
         Initialize multi-horizon loss.
 
@@ -32,17 +33,18 @@ class MultiHorizonLoss(nn.Module):
         self.base_loss = base_loss
 
         # Select base loss function
-        if base_loss == 'mse':
+        if base_loss == "mse":
             self.loss_fn = nn.MSELoss()
-        elif base_loss == 'mae':
+        elif base_loss == "mae":
             self.loss_fn = nn.L1Loss()
-        elif base_loss == 'huber':
+        elif base_loss == "huber":
             self.loss_fn = nn.HuberLoss()
         else:
             raise ValueError(f"Unknown loss function: {base_loss}")
 
-    def forward(self, predictions: Dict[int, torch.Tensor],
-                targets: Dict[int, torch.Tensor]) -> torch.Tensor:
+    def forward(
+        self, predictions: Dict[int, torch.Tensor], targets: Dict[int, torch.Tensor]
+    ) -> torch.Tensor:
         """
         Calculate weighted loss across all horizons.
 
@@ -136,21 +138,21 @@ def get_loss_function(loss_name: str, **kwargs) -> nn.Module:
     Returns:
         Loss function module
     """
-    if loss_name == 'mse':
+    if loss_name == "mse":
         return nn.MSELoss(**kwargs)
-    elif loss_name == 'mae' or loss_name == 'l1':
+    elif loss_name == "mae" or loss_name == "l1":
         return nn.L1Loss(**kwargs)
-    elif loss_name == 'huber':
+    elif loss_name == "huber":
         return nn.HuberLoss(**kwargs)
-    elif loss_name == 'weighted_mse':
+    elif loss_name == "weighted_mse":
         return WeightedMSELoss(**kwargs)
-    elif loss_name == 'multi_horizon':
+    elif loss_name == "multi_horizon":
         return MultiHorizonLoss(**kwargs)
     else:
         raise ValueError(f"Unknown loss function: {loss_name}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Test loss functions
     print("Custom Loss Functions")
     print("=" * 60)
@@ -165,7 +167,7 @@ if __name__ == '__main__':
     # Test multi-horizon loss
     print("\nMulti-Horizon Loss:")
     weights = {20: 1.0, 60: 1.5, 120: 1.0}
-    multi_loss = MultiHorizonLoss(horizon_weights=weights, base_loss='mse')
+    multi_loss = MultiHorizonLoss(horizon_weights=weights, base_loss="mse")
     loss_value = multi_loss(predictions, targets)
     print(f"  Loss value: {loss_value.item():.4f}")
     print(f"  Horizon weights: {weights}")

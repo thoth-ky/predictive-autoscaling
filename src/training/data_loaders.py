@@ -16,8 +16,12 @@ class TimeSeriesDataset(Dataset):
     Handles input sequences (X) and multiple target horizons (y_dict).
     """
 
-    def __init__(self, X: np.ndarray, y_dict: Dict[int, np.ndarray],
-                 metadata: Optional[np.ndarray] = None):
+    def __init__(
+        self,
+        X: np.ndarray,
+        y_dict: Dict[int, np.ndarray],
+        metadata: Optional[np.ndarray] = None,
+    ):
         """
         Initialize dataset.
 
@@ -76,10 +80,15 @@ class SingleHorizonDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 
-def create_data_loaders(X_train: np.ndarray, y_train_dict: Dict[int, np.ndarray],
-                        X_val: np.ndarray, y_val_dict: Dict[int, np.ndarray],
-                        batch_size: int = 32, num_workers: int = 4,
-                        shuffle_train: bool = True) -> Tuple[DataLoader, DataLoader]:
+def create_data_loaders(
+    X_train: np.ndarray,
+    y_train_dict: Dict[int, np.ndarray],
+    X_val: np.ndarray,
+    y_val_dict: Dict[int, np.ndarray],
+    batch_size: int = 32,
+    num_workers: int = 4,
+    shuffle_train: bool = True,
+) -> Tuple[DataLoader, DataLoader]:
     """
     Create training and validation data loaders.
 
@@ -103,7 +112,7 @@ def create_data_loaders(X_train: np.ndarray, y_train_dict: Dict[int, np.ndarray]
         batch_size=batch_size,
         shuffle=shuffle_train,
         num_workers=num_workers,
-        pin_memory=True
+        pin_memory=True,
     )
 
     val_loader = DataLoader(
@@ -111,13 +120,13 @@ def create_data_loaders(X_train: np.ndarray, y_train_dict: Dict[int, np.ndarray]
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
-        pin_memory=True
+        pin_memory=True,
     )
 
     return train_loader, val_loader
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Test data loaders
     print("Time Series Data Loaders")
     print("=" * 60)

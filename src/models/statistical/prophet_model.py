@@ -9,7 +9,8 @@ from prophet import Prophet
 from typing import Optional, Dict, Tuple
 from src.models.base_model import StatisticalBaseModel
 import warnings
-warnings.filterwarnings('ignore')
+
+warnings.filterwarnings("ignore")
 
 
 class ProphetPredictor(StatisticalBaseModel):
@@ -34,15 +35,22 @@ class ProphetPredictor(StatisticalBaseModel):
         """
         super().__init__(config)
 
-        self.changepoint_prior_scale = config.get('prophet_changepoint_prior_scale', 0.05)
-        self.yearly_seasonality = config.get('prophet_yearly_seasonality', False)
-        self.weekly_seasonality = config.get('prophet_weekly_seasonality', True)
-        self.daily_seasonality = config.get('prophet_daily_seasonality', True)
+        self.changepoint_prior_scale = config.get(
+            "prophet_changepoint_prior_scale", 0.05
+        )
+        self.yearly_seasonality = config.get("prophet_yearly_seasonality", False)
+        self.weekly_seasonality = config.get("prophet_weekly_seasonality", True)
+        self.daily_seasonality = config.get("prophet_daily_seasonality", True)
 
-        self.interval_width = config.get('interval_width', 0.95)
-        self.freq = config.get('freq', '15S')  # 15 second intervals
+        self.interval_width = config.get("interval_width", 0.95)
+        self.freq = config.get("freq", "15S")  # 15 second intervals
 
-    def fit(self, y_train: np.ndarray, timestamps: Optional[pd.DatetimeIndex] = None, **kwargs):
+    def fit(
+        self,
+        y_train: np.ndarray,
+        timestamps: Optional[pd.DatetimeIndex] = None,
+        **kwargs,
+    ):
         """
         Fit Prophet model.
 
@@ -61,16 +69,11 @@ class ProphetPredictor(StatisticalBaseModel):
         # Create timestamps if not provided
         if timestamps is None:
             timestamps = pd.date_range(
-                start='2024-01-01',
-                periods=len(y_train),
-                freq=self.freq
+                start="2024-01-01", periods=len(y_train), freq=self.freq
             )
 
         # Prepare DataFrame for Prophet
-        df = pd.DataFrame({
-            'ds': timestamps,
-            'y': y_train
-        })
+        df = pd.DataFrame({"ds": timestamps, "y": y_train})
 
         # Initialize and fit Prophet model
         self.model = Prophet(
@@ -78,12 +81,13 @@ class ProphetPredictor(StatisticalBaseModel):
             yearly_seasonality=self.yearly_seasonality,
             weekly_seasonality=self.weekly_seasonality,
             daily_seasonality=self.daily_seasonality,
-            interval_width=self.interval_width
+            interval_width=self.interval_width,
         )
 
         # Suppress Prophet logging
         import logging
-        logging.getLogger('prophet').setLevel(logging.ERROR)
+
+        logging.getLogger("prophet").setLevel(logging.ERROR)
 
         self.model.fit(df)
         self.is_fitted = True
@@ -105,21 +109,25 @@ class ProphetPredictor(StatisticalBaseModel):
             raise ValueError("Model must be fitted before prediction")
 
         # Create future dataframe
-        future = pd.DataFrame({
-            'ds': pd.date_range(
-                start=self.last_timestamp + pd.Timedelta(self.freq),
-                periods=steps,
-                freq=self.freq
-            )
-        })
+        future = pd.DataFrame(
+            {
+                "ds": pd.date_range(
+                    start=self.last_timestamp + pd.Timedelta(self.freq),
+                    periods=steps,
+                    freq=self.freq,
+                )
+            }
+        )
 
         # Make prediction
         forecast = self.model.predict(future)
 
         # Return yhat (point predictions)
-        return forecast['yhat'].values
+        return forecast["yhat"].values
 
-    def predict_with_uncertainty(self, steps: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def predict_with_uncertainty(
+        self, steps: int
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Predict with uncertainty intervals.
 
@@ -132,20 +140,22 @@ class ProphetPredictor(StatisticalBaseModel):
         if not self.is_fitted:
             raise ValueError("Model must be fitted before prediction")
 
-        future = pd.DataFrame({
-            'ds': pd.date_range(
-                start=self.last_timestamp + pd.Timedelta(self.freq),
-                periods=steps,
-                freq=self.freq
-            )
-        })
+        future = pd.DataFrame(
+            {
+                "ds": pd.date_range(
+                    start=self.last_timestamp + pd.Timedelta(self.freq),
+                    periods=steps,
+                    freq=self.freq,
+                )
+            }
+        )
 
         forecast = self.model.predict(future)
 
         return (
-            forecast['yhat'].values,
-            forecast['yhat_lower'].values,
-            forecast['yhat_upper'].values
+            forecast["yhat"].values,
+            forecast["yhat_lower"].values,
+            forecast["yhat_upper"].values,
         )
 
     def predict_multi_horizon(self, horizons: list) -> Dict[int, np.ndarray]:
@@ -177,13 +187,15 @@ class ProphetPredictor(StatisticalBaseModel):
         Args:
             steps: Number of steps to forecast
         """
-        future = pd.DataFrame({
-            'ds': pd.date_range(
-                start=self.last_timestamp + pd.Timedelta(self.freq),
-                periods=steps,
-                freq=self.freq
-            )
-        })
+        future = pd.DataFrame(
+            {
+                "ds": pd.date_range(
+                    start=self.last_timestamp + pd.Timedelta(self.freq),
+                    periods=steps,
+                    freq=self.freq,
+                )
+            }
+        )
 
         forecast = self.model.predict(future)
 
@@ -191,7 +203,7 @@ class ProphetPredictor(StatisticalBaseModel):
         import matplotlib.pyplot as plt
 
         fig1 = self.model.plot(forecast)
-        plt.title('Prophet Forecast')
+        plt.title("Prophet Forecast")
         plt.tight_layout()
 
         fig2 = self.model.plot_components(forecast)
@@ -200,10 +212,12 @@ class ProphetPredictor(StatisticalBaseModel):
         plt.show()
 
 
-def train_prophet_baseline(y_train: np.ndarray,
-                           timestamps: Optional[pd.DatetimeIndex] = None,
-                           horizons: list = [20, 60, 120],
-                           config: Optional[dict] = None) -> Tuple[ProphetPredictor, Dict]:
+def train_prophet_baseline(
+    y_train: np.ndarray,
+    timestamps: Optional[pd.DatetimeIndex] = None,
+    horizons: list = [20, 60, 120],
+    config: Optional[dict] = None,
+) -> Tuple[ProphetPredictor, Dict]:
     """
     Train Prophet model and evaluate.
 
@@ -218,11 +232,11 @@ def train_prophet_baseline(y_train: np.ndarray,
     """
     if config is None:
         config = {
-            'prophet_changepoint_prior_scale': 0.05,
-            'prophet_yearly_seasonality': False,
-            'prophet_weekly_seasonality': True,
-            'prophet_daily_seasonality': True,
-            'freq': '15S'
+            "prophet_changepoint_prior_scale": 0.05,
+            "prophet_yearly_seasonality": False,
+            "prophet_weekly_seasonality": True,
+            "prophet_daily_seasonality": True,
+            "freq": "15S",
         }
 
     # Train model
@@ -233,14 +247,14 @@ def train_prophet_baseline(y_train: np.ndarray,
     predictions = model.predict_multi_horizon(horizons)
 
     results = {
-        'predictions': predictions,
-        'config': config,
+        "predictions": predictions,
+        "config": config,
     }
 
     return model, results
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Test Prophet model
     print("Prophet Time Series Model")
     print("=" * 60)
@@ -248,7 +262,7 @@ if __name__ == '__main__':
     # Generate synthetic time series with trend and seasonality
     np.random.seed(42)
     n = 500
-    timestamps = pd.date_range(start='2024-01-01', periods=n, freq='15S')
+    timestamps = pd.date_range(start="2024-01-01", periods=n, freq="15S")
 
     # Trend
     trend = np.linspace(50, 70, n)
@@ -275,11 +289,11 @@ if __name__ == '__main__':
     # Test Prophet
     print("\n1. Training Prophet Model")
     config = {
-        'prophet_changepoint_prior_scale': 0.05,
-        'prophet_yearly_seasonality': False,
-        'prophet_weekly_seasonality': False,
-        'prophet_daily_seasonality': True,
-        'freq': '15S'
+        "prophet_changepoint_prior_scale": 0.05,
+        "prophet_yearly_seasonality": False,
+        "prophet_weekly_seasonality": False,
+        "prophet_daily_seasonality": True,
+        "freq": "15S",
     }
 
     model = ProphetPredictor(config)

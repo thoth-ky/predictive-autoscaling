@@ -10,7 +10,8 @@ from statsmodels.tsa.statespace.sarimax import SARIMAX
 from typing import Optional, Dict, Tuple
 from src.models.base_model import StatisticalBaseModel
 import warnings
-warnings.filterwarnings('ignore')
+
+warnings.filterwarnings("ignore")
 
 
 class ARIMAPredictor(StatisticalBaseModel):
@@ -34,8 +35,8 @@ class ARIMAPredictor(StatisticalBaseModel):
         """
         super().__init__(config)
 
-        self.order = config.get('arima_order', (1, 1, 1))
-        self.seasonal_order = config.get('arima_seasonal_order', (0, 0, 0, 0))
+        self.order = config.get("arima_order", (1, 1, 1))
+        self.seasonal_order = config.get("arima_seasonal_order", (0, 0, 0, 0))
 
         self.use_seasonal = self.seasonal_order != (0, 0, 0, 0)
 
@@ -62,14 +63,14 @@ class ARIMAPredictor(StatisticalBaseModel):
                     order=self.order,
                     seasonal_order=self.seasonal_order,
                     enforce_stationarity=False,
-                    enforce_invertibility=False
+                    enforce_invertibility=False,
                 ).fit(disp=False)
             else:
                 self.model = ARIMA(
                     y_train,
                     order=self.order,
                     enforce_stationarity=False,
-                    enforce_invertibility=False
+                    enforce_invertibility=False,
                 ).fit()
 
             self.is_fitted = True
@@ -95,7 +96,7 @@ class ARIMAPredictor(StatisticalBaseModel):
             raise ValueError("Model must be fitted before prediction")
 
         forecast = self.model.forecast(steps=steps)
-        return forecast.values if hasattr(forecast, 'values') else forecast
+        return forecast.values if hasattr(forecast, "values") else forecast
 
     def predict_multi_horizon(self, horizons: list) -> Dict[int, np.ndarray]:
         """
@@ -136,9 +137,9 @@ class AutoARIMA(StatisticalBaseModel):
         """
         super().__init__(config)
 
-        self.max_p = config.get('max_p', 3)
-        self.max_d = config.get('max_d', 2)
-        self.max_q = config.get('max_q', 3)
+        self.max_p = config.get("max_p", 3)
+        self.max_d = config.get("max_d", 2)
+        self.max_q = config.get("max_q", 3)
 
         self.best_order = None
         self.best_aic = np.inf
@@ -185,12 +186,15 @@ class AutoARIMA(StatisticalBaseModel):
             raise ValueError("Model must be fitted before prediction")
 
         forecast = self.model.forecast(steps=steps)
-        return forecast.values if hasattr(forecast, 'values') else forecast
+        return forecast.values if hasattr(forecast, "values") else forecast
 
 
-def train_arima_baseline(y_train: np.ndarray, y_val: np.ndarray,
-                         horizons: list = [20, 60, 120],
-                         config: Optional[dict] = None) -> Tuple[ARIMAPredictor, Dict]:
+def train_arima_baseline(
+    y_train: np.ndarray,
+    y_val: np.ndarray,
+    horizons: list = [20, 60, 120],
+    config: Optional[dict] = None,
+) -> Tuple[ARIMAPredictor, Dict]:
     """
     Train ARIMA model and evaluate on validation set.
 
@@ -204,10 +208,7 @@ def train_arima_baseline(y_train: np.ndarray, y_val: np.ndarray,
         Tuple of (trained_model, validation_results)
     """
     if config is None:
-        config = {
-            'arima_order': (1, 1, 1),
-            'arima_seasonal_order': (0, 0, 0, 0)
-        }
+        config = {"arima_order": (1, 1, 1), "arima_seasonal_order": (0, 0, 0, 0)}
 
     # Flatten to 1D if needed
     if y_train.ndim > 1:
@@ -222,14 +223,14 @@ def train_arima_baseline(y_train: np.ndarray, y_val: np.ndarray,
 
     # Evaluate (simplified - just return predictions)
     results = {
-        'predictions': predictions,
-        'model_order': model.order,
+        "predictions": predictions,
+        "model_order": model.order,
     }
 
     return model, results
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Test ARIMA model
     print("ARIMA Time Series Model")
     print("=" * 60)
@@ -254,7 +255,7 @@ if __name__ == '__main__':
 
     # Test standard ARIMA
     print("\n1. Standard ARIMA")
-    config = {'arima_order': (2, 1, 2)}
+    config = {"arima_order": (2, 1, 2)}
     model = ARIMAPredictor(config)
     model.fit(y_train)
 
@@ -274,7 +275,7 @@ if __name__ == '__main__':
 
     # Test Auto-ARIMA
     print("\n3. Auto-ARIMA")
-    auto_config = {'max_p': 2, 'max_d': 1, 'max_q': 2}
+    auto_config = {"max_p": 2, "max_d": 1, "max_q": 2}
     auto_model = AutoARIMA(auto_config)
     auto_model.fit(y_train)
 

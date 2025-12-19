@@ -12,24 +12,24 @@ import numpy as np
 class MetricType(Enum):
     """Enumeration of supported container metrics."""
 
-    CPU = 'container_cpu_rate'
-    MEMORY = 'container_memory'
-    MEMORY_USAGE = 'memory_usage'
-    DISK_READS = 'container_fs_reads'
-    DISK_WRITES = 'container_fs_writes'
-    NETWORK_RX = 'container_network_rx'
-    NETWORK_TX = 'container_network_tx'
+    CPU = "container_cpu_rate"
+    MEMORY = "container_memory"
+    MEMORY_USAGE = "memory_usage"
+    DISK_READS = "container_fs_reads"
+    DISK_WRITES = "container_fs_writes"
+    NETWORK_RX = "container_network_rx"
+    NETWORK_TX = "container_network_tx"
 
     @classmethod
     def from_string(cls, metric_name: str):
         """Get MetricType from string name."""
         mapping = {
-            'cpu': cls.CPU,
-            'memory': cls.MEMORY,
-            'disk_reads': cls.DISK_READS,
-            'disk_writes': cls.DISK_WRITES,
-            'network_rx': cls.NETWORK_RX,
-            'network_tx': cls.NETWORK_TX,
+            "cpu": cls.CPU,
+            "memory": cls.MEMORY,
+            "disk_reads": cls.DISK_READS,
+            "disk_writes": cls.DISK_WRITES,
+            "network_rx": cls.NETWORK_RX,
+            "network_tx": cls.NETWORK_TX,
         }
         return mapping.get(metric_name.lower(), cls.CPU)
 
@@ -55,11 +55,15 @@ class MetricPreprocessor:
         """
         self.metric_type = metric_type
         self.config = config or {}
-        self.outlier_threshold = self.config.get('outlier_threshold', 3.0)
-        self.resample_freq = self.config.get('resample_freq', '15S')
+        self.outlier_threshold = self.config.get("outlier_threshold", 3.0)
+        self.resample_freq = self.config.get("resample_freq", "15S")
 
-    def process(self, df: pd.DataFrame, container_name: str = 'webapp',
-                service_col: str = 'service') -> pd.DataFrame:
+    def process(
+        self,
+        df: pd.DataFrame,
+        container_name: str = "webapp",
+        service_col: str = "service",
+    ) -> pd.DataFrame:
         """
         Main preprocessing pipeline.
 
@@ -75,8 +79,10 @@ class MetricPreprocessor:
         filtered = self._filter_data(df, container_name, service_col)
 
         if len(filtered) == 0:
-            raise ValueError(f"No data found for metric={self.metric_type.value}, "
-                           f"container={container_name}")
+            raise ValueError(
+                f"No data found for metric={self.metric_type.value}, "
+                f"container={container_name}"
+            )
 
         # 2. Apply metric-specific transformations
         transformed = self._metric_specific_transform(filtered.copy())
@@ -89,12 +95,13 @@ class MetricPreprocessor:
 
         return cleaned
 
-    def _filter_data(self, df: pd.DataFrame, container_name: str,
-                    service_col: str) -> pd.DataFrame:
+    def _filter_data(
+        self, df: pd.DataFrame, container_name: str, service_col: str
+    ) -> pd.DataFrame:
         """Filter DataFrame for specific metric and container."""
         # Try different column names for metric identification
         metric_col = None
-        for col in ['metric_name', 'metric', '__name__']:
+        for col in ["metric_name", "metric", "__name__"]:
             if col in df.columns:
                 metric_col = col
                 break
@@ -107,9 +114,11 @@ class MetricPreprocessor:
 
         # Filter by container/service
         if service_col in df.columns:
-            mask &= (df[service_col].str.contains(container_name, case=False, na=False))
-        elif 'container_name' in df.columns:
-            mask &= (df['container_name'].str.contains(container_name, case=False, na=False))
+            mask &= df[service_col].str.contains(container_name, case=False, na=False)
+        elif "container_name" in df.columns:
+            mask &= df["container_name"].str.contains(
+                container_name, case=False, na=False
+            )
 
         return df[mask]
 
@@ -125,26 +134,26 @@ class MetricPreprocessor:
         if self.metric_type == MetricType.CPU:
             # CPU is already a rate, ensure it's in percentage
             # If it's a fraction (0-1), convert to percentage
-            if df['value'].max() <= 1.0:
-                df['value'] = df['value'] * 100
+            if df["value"].max() <= 1.0:
+                df["value"] = df["value"] * 100
             # Clip to valid range
-            df['value'] = df['value'].clip(lower=0, upper=100)
+            df["value"] = df["value"].clip(lower=0, upper=100)
 
         elif self.metric_type in [MetricType.MEMORY, MetricType.MEMORY_USAGE]:
             # Convert bytes to MB for easier interpretation
-            df['value'] = df['value'] / (1024 ** 2)
-            df['value'] = df['value'].clip(lower=0)
+            df["value"] = df["value"] / (1024**2)
+            df["value"] = df["value"].clip(lower=0)
 
         elif self.metric_type in [MetricType.DISK_READS, MetricType.DISK_WRITES]:
             # Disk I/O already a rate, ensure non-negative
-            df['value'] = df['value'].clip(lower=0)
+            df["value"] = df["value"].clip(lower=0)
             # Optionally convert to ops/sec if needed
             # (already in that unit from Prometheus rate())
 
         elif self.metric_type in [MetricType.NETWORK_RX, MetricType.NETWORK_TX]:
             # Convert bytes/sec to Mbps for easier interpretation
-            df['value'] = (df['value'] * 8) / (1024 ** 2)
-            df['value'] = df['value'].clip(lower=0)
+            df["value"] = (df["value"] * 8) / (1024**2)
+            df["value"] = df["value"].clip(lower=0)
 
         return df
 
@@ -159,16 +168,16 @@ class MetricPreprocessor:
             Resampled DataFrame with regular intervals
         """
         # Ensure timestamp column is datetime
-        if 'timestamp' not in df.columns:
+        if "timestamp" not in df.columns:
             raise ValueError("DataFrame must have 'timestamp' column")
 
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
 
         # Set timestamp as index
-        df_indexed = df.set_index('timestamp').sort_index()
+        df_indexed = df.set_index("timestamp").sort_index()
 
         # Resample to regular intervals (default 15 seconds)
-        resampled = df_indexed['value'].resample(self.resample_freq).mean()
+        resampled = df_indexed["value"].resample(self.resample_freq).mean()
 
         # Forward fill missing values (up to 3 intervals)
         resampled = resampled.ffill(limit=3)
@@ -177,10 +186,9 @@ class MetricPreprocessor:
         resampled = resampled.bfill(limit=3)
 
         # Create clean DataFrame
-        result = pd.DataFrame({
-            'timestamp': resampled.index,
-            'value': resampled.values
-        }).reset_index(drop=True)
+        result = pd.DataFrame(
+            {"timestamp": resampled.index, "value": resampled.values}
+        ).reset_index(drop=True)
 
         # Drop any remaining NaNs
         result = result.dropna()
@@ -197,7 +205,7 @@ class MetricPreprocessor:
         if self.outlier_threshold is None:
             return df
 
-        values = df['value'].values
+        values = df["value"].values
         mean = values.mean()
         std = values.std()
 
@@ -209,15 +217,17 @@ class MetricPreprocessor:
         lower_bound = max(0, mean - (self.outlier_threshold * std))
 
         # Clip outliers instead of removing them
-        df['value'] = df['value'].clip(lower=lower_bound, upper=upper_bound)
+        df["value"] = df["value"].clip(lower=lower_bound, upper=upper_bound)
 
         return df
 
 
-def prepare_metric_data(df: pd.DataFrame,
-                       metric_name: str,
-                       container_name: str = 'webapp',
-                       config: Optional[dict] = None) -> pd.DataFrame:
+def prepare_metric_data(
+    df: pd.DataFrame,
+    metric_name: str,
+    container_name: str = "webapp",
+    config: Optional[dict] = None,
+) -> pd.DataFrame:
     """
     Convenience function to preprocess metric data.
 
@@ -240,7 +250,7 @@ def prepare_metric_data(df: pd.DataFrame,
     return preprocessor.process(df, container_name)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Example usage
     import glob
 
@@ -248,7 +258,9 @@ if __name__ == '__main__':
     print("=" * 60)
 
     # Find latest data file
-    data_files = glob.glob('/home/thoth/dpn/predictive-autoscaling/data/raw/metrics_*.csv')
+    data_files = glob.glob(
+        "/home/thoth/dpn/predictive-autoscaling/data/raw/metrics_*.csv"
+    )
 
     if data_files:
         latest_file = max(data_files)
@@ -259,17 +271,28 @@ if __name__ == '__main__':
         print(f"Columns: {df.columns.tolist()}")
 
         # Test preprocessing for each metric
-        metrics = ['cpu', 'memory', 'disk_reads', 'disk_writes', 'network_rx', 'network_tx']
+        metrics = [
+            "cpu",
+            "memory",
+            "disk_reads",
+            "disk_writes",
+            "network_rx",
+            "network_tx",
+        ]
 
         for metric in metrics:
             try:
-                processed = prepare_metric_data(df, metric, 'webapp')
+                processed = prepare_metric_data(df, metric, "webapp")
                 print(f"\n{metric.upper()}:")
                 print(f"  Processed shape: {processed.shape}")
-                print(f"  Value range: [{processed['value'].min():.2f}, "
-                      f"{processed['value'].max():.2f}]")
-                print(f"  Time range: {processed['timestamp'].min()} to "
-                      f"{processed['timestamp'].max()}")
+                print(
+                    f"  Value range: [{processed['value'].min():.2f}, "
+                    f"{processed['value'].max():.2f}]"
+                )
+                print(
+                    f"  Time range: {processed['timestamp'].min()} to "
+                    f"{processed['timestamp'].max()}"
+                )
             except ValueError as e:
                 print(f"\n{metric.upper()}: {str(e)}")
     else:

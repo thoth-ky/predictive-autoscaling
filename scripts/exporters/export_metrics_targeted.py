@@ -49,21 +49,20 @@ class KubernetesMetricsExporter:
 
         # Setup logging
         logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s'
+            level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
         )
 
         # Define metric query templates (will be modified with filters)
         self.metric_queries_base = {
-            "container_cpu_rate": 'rate(container_cpu_usage_seconds_total{filters}[1m])',
-            "container_memory_usage": 'container_memory_usage_bytes{filters}',
-            "container_memory_limit": 'container_spec_memory_limit_bytes{filters}',
-            "container_network_receive_rate": 'rate(container_network_receive_bytes_total{filters}[1m])',
-            "container_network_transmit_rate": 'rate(container_network_transmit_bytes_total{filters}[1m])',
-            "container_fs_reads_rate": 'rate(container_fs_reads_total{filters}[1m])',
-            "container_fs_writes_rate": 'rate(container_fs_writes_total{filters}[1m])',
-            "container_fs_read_bytes_rate": 'rate(container_fs_read_bytes_total{filters}[1m])',
-            "container_fs_write_bytes_rate": 'rate(container_fs_write_bytes_total{filters}[1m])',
+            "container_cpu_rate": "rate(container_cpu_usage_seconds_total{filters}[1m])",
+            "container_memory_usage": "container_memory_usage_bytes{filters}",
+            "container_memory_limit": "container_spec_memory_limit_bytes{filters}",
+            "container_network_receive_rate": "rate(container_network_receive_bytes_total{filters}[1m])",
+            "container_network_transmit_rate": "rate(container_network_transmit_bytes_total{filters}[1m])",
+            "container_fs_reads_rate": "rate(container_fs_reads_total{filters}[1m])",
+            "container_fs_writes_rate": "rate(container_fs_writes_total{filters}[1m])",
+            "container_fs_read_bytes_rate": "rate(container_fs_read_bytes_total{filters}[1m])",
+            "container_fs_write_bytes_rate": "rate(container_fs_write_bytes_total{filters}[1m])",
         }
 
     def _build_label_selector(self) -> str:
@@ -90,7 +89,9 @@ class KubernetesMetricsExporter:
             return None
 
         label_selector = self._build_label_selector()
-        return self.metric_queries_base[metric_name].replace("{filters}", f"{{{label_selector}}}")
+        return self.metric_queries_base[metric_name].replace(
+            "{filters}", f"{{{label_selector}}}"
+        )
 
     def _split_time_range(
         self, start_time: datetime, end_time: datetime
@@ -333,9 +334,7 @@ class KubernetesMetricsExporter:
 
         return output_file
 
-    def export_metrics(
-        self, seconds=900, output_dir="data/raw/metrics", all=False
-    ):
+    def export_metrics(self, seconds=900, output_dir="data/raw/metrics", all=False):
         """
         Export metrics with optimizations:
         - Async/parallel fetching
@@ -376,7 +375,11 @@ class KubernetesMetricsExporter:
         # Run async export
         return asyncio.run(
             self._export_all_metrics_async(
-                start_time, end_time, output_dir, timestamp_str, all_metrics if all else None
+                start_time,
+                end_time,
+                output_dir,
+                timestamp_str,
+                all_metrics if all else None,
             )
         )
 
@@ -453,7 +456,7 @@ Examples:
 
   # Filter by custom labels
   %(prog)s --label-filter app=myapp --label-filter env=prod
-        """
+        """,
     )
 
     # Time range
@@ -505,7 +508,7 @@ Examples:
         action="append",
         dest="label_filters",
         metavar="KEY=VALUE",
-        help='Label filter (e.g., app=myapp). Can be used multiple times.',
+        help="Label filter (e.g., app=myapp). Can be used multiple times.",
     )
 
     # Performance tuning

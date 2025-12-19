@@ -21,7 +21,10 @@ import numpy as np
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.config.base_config import load_config, create_default_config  # noqa: E402
-from src.preprocessing.metric_specific import prepare_metric_data, MetricType  # noqa: E402
+from src.preprocessing.metric_specific import (
+    prepare_metric_data,
+    MetricType,
+)  # noqa: E402
 from src.preprocessing.sliding_windows import (  # noqa: E402
     create_multi_horizon_features_and_windows,
 )

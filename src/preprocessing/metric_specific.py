@@ -178,12 +178,14 @@ class MetricPreprocessor:
         resampled = resampled.bfill(limit=3)
 
         # Create clean DataFrame with container and metric information
-        result = pd.DataFrame({
-            "timestamp": resampled.index, 
-            "value": resampled.values,
-            "container_name": container_name,
-            "metric_name": self.metric_type.value
-        }).reset_index(drop=True)
+        result = pd.DataFrame(
+            {
+                "timestamp": resampled.index,
+                "value": resampled.values,
+                "container_name": container_name,
+                "metric_name": self.metric_type.value,
+            }
+        ).reset_index(drop=True)
 
         # Drop any remaining NaNs
         result = result.dropna()

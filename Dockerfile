@@ -75,7 +75,8 @@ COPY pyproject.toml .
 
 # Install Python dependencies
 # For GPU builds, PyTorch will automatically use CUDA if available
-RUN pip install --no-cache-dir .
+# Use --ignore-installed to avoid conflicts with system packages
+RUN pip install --no-cache-dir --ignore-installed .
 
 # Install additional utilities for development
 RUN pip install --no-cache-dir \

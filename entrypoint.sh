@@ -53,7 +53,7 @@ fi
 
 # Set MLflow tracking URI if not already set
 if [ -z "$MLFLOW_TRACKING_URI" ]; then
-    export MLFLOW_TRACKING_URI="file://$BASE_DIR/experiments/runs"
+    export MLFLOW_TRACKING_URI="sqlite:///$BASE_DIR/experiments/mlflow.db"
 fi
 
 # Default command

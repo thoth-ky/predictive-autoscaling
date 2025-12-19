@@ -62,6 +62,13 @@ class ModelConfig:
     prophet_weekly_seasonality: bool = True
     prophet_daily_seasonality: bool = True
 
+    def __post_init__(self):
+        """Convert lists to tuples after initialization."""
+        if isinstance(self.arima_order, list):
+            self.arima_order = tuple(self.arima_order)
+        if isinstance(self.arima_seasonal_order, list):
+            self.arima_seasonal_order = tuple(self.arima_seasonal_order)
+
 
 @dataclass
 class TrainingConfig:
@@ -123,11 +130,16 @@ class ExperimentConfig:
 
     def to_dict(self) -> Dict:
         """Convert config to dictionary."""
+        model_dict = self.model.__dict__.copy()
+        # Convert tuples to lists for YAML compatibility
+        model_dict["arima_order"] = list(self.model.arima_order)
+        model_dict["arima_seasonal_order"] = list(self.model.arima_seasonal_order)
+
         return {
             "metric_name": self.metric_name,
             "container_name": self.container_name,
             "data": self.data.__dict__,
-            "model": self.model.__dict__,
+            "model": model_dict,
             "training": self.training.__dict__,
         }
 
@@ -220,6 +232,9 @@ if __name__ == "__main__":
 
     for metric in metrics:
         config = create_default_config(metric, model_type="lstm")
-        config_path = f"/home/thoth/dpn/predictive-autoscaling/src/config/model_configs/{metric}_config.yaml"
+        config_path = (
+            f"/home/thoth/dpn/predictive-autoscaling/src/config/model_configs/"
+            f"{metric}_config.yaml"
+        )
         config.save_yaml(config_path)
         print(f"Created config for {metric}")

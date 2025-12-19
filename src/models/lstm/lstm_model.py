@@ -5,7 +5,7 @@ LSTM architecture with multi-horizon prediction heads for container metrics.
 
 import torch
 import torch.nn as nn
-from typing import List, Optional
+from typing import Optional
 from src.models.base_model import BaseTimeSeriesModel
 
 
@@ -242,7 +242,7 @@ if __name__ == "__main__":
     # Create model
     model = LSTMPredictor(model_config)
 
-    print(f"\nModel Info:")
+    print("\nModel Info:")
     info = model.get_model_info()
     for key, value in info.items():
         print(f"  {key}: {value}")
@@ -254,7 +254,7 @@ if __name__ == "__main__":
 
     dummy_input = torch.randn(batch_size, sequence_length, input_size)
 
-    print(f"\nTest Forward Pass:")
+    print("\nTest Forward Pass:")
     print(f"  Input shape: {dummy_input.shape}")
 
     # Test single horizon prediction
@@ -264,7 +264,7 @@ if __name__ == "__main__":
 
     # Test all horizons
     all_predictions = model.predict_all_horizons(dummy_input)
-    print(f"\n  All Horizons:")
+    print("\n  All Horizons:")
     for h, pred in all_predictions.items():
         print(f"    Horizon {h}: {pred.shape}")
 

@@ -200,7 +200,7 @@ if __name__ == "__main__":
 
     # Get split info
     split_info = splitter.get_split_info(n_samples)
-    print(f"\nSplit Information:")
+    print("\nSplit Information:")
     for key, value in split_info.items():
         print(f"  {key}: {value}")
 
@@ -209,7 +209,7 @@ if __name__ == "__main__":
         X, y_dict
     )
 
-    print(f"\nAfter Split:")
+    print("\nAfter Split:")
     print(f"  X_train: {X_train.shape}")
     print(f"  X_val: {X_val.shape}")
     print(f"  X_test: {X_test.shape}")
@@ -221,10 +221,11 @@ if __name__ == "__main__":
         print(f"    y_test: {y_test_dict[h].shape}")
 
     # Verify temporal order preserved
-    print(f"\nTemporal Order Verification:")
-    print(f"  Train samples: indices 0 to {split_info['train_samples']-1}")
+    print("\nTemporal Order Verification:")
+    print(f"  Train samples: indices 0 to {split_info['train_samples'] - 1}")
     print(
-        f"  Val samples: indices {split_info['train_samples']} to {split_info['val_indices'][1]-1}"
+        f"  Val samples: indices {split_info['train_samples']} "
+        f"to {split_info['val_indices'][1] - 1}"
     )
-    print(f"  Test samples: indices {split_info['val_indices'][1]} to {n_samples-1}")
-    print(f"  ✅ No shuffling - temporal order preserved!")
+    print(f"  Test samples: indices {split_info['val_indices'][1]} to {n_samples - 1}")
+    print("  ✅ No shuffling - temporal order preserved!")

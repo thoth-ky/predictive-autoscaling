@@ -11,7 +11,6 @@ from src.training.callbacks import (
 )
 from src.training.data_loaders import (
     TimeSeriesDataset,
-    MultiHorizonDataset,
     create_data_loaders,
 )
 
@@ -24,6 +23,5 @@ __all__ = [
     "LearningRateScheduler",
     # Data loaders
     "TimeSeriesDataset",
-    "MultiHorizonDataset",
     "create_data_loaders",
 ]

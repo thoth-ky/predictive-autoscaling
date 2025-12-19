@@ -36,7 +36,7 @@ class S3DataManager:
         try:
             self.s3_client.head_bucket(Bucket=self.bucket_name)
             print(f"Bucket {self.bucket_name} already exists")
-        except:
+        except Exception:
             print(f"Creating bucket {self.bucket_name}")
             if self.region == "us-east-1":
                 self.s3_client.create_bucket(Bucket=self.bucket_name)
@@ -163,7 +163,7 @@ class S3DataManager:
             for horizon, y in y_test_dict.items():
                 self.upload_numpy_array(y, f"{base_path}/test/y/y_{horizon}.npy")
 
-        print(f"Data upload complete!")
+        print("Data upload complete!")
         print(f"  S3 URI: s3://{self.bucket_name}/{base_path}/")
 
         return f"s3://{self.bucket_name}/{base_path}/"

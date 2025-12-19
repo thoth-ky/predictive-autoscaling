@@ -202,11 +202,11 @@ class ProphetPredictor(StatisticalBaseModel):
         # Plot
         import matplotlib.pyplot as plt
 
-        fig1 = self.model.plot(forecast)
+        self.model.plot(forecast)
         plt.title("Prophet Forecast")
         plt.tight_layout()
 
-        fig2 = self.model.plot_components(forecast)
+        self.model.plot_components(forecast)
         plt.tight_layout()
 
         plt.show()
@@ -281,7 +281,7 @@ if __name__ == "__main__":
     y_train = y[:train_size]
     timestamps_train = timestamps[:train_size]
 
-    print(f"\nData:")
+    print("\nData:")
     print(f"  Total length: {n}")
     print(f"  Train size: {len(y_train)}")
     print(f"  Time range: {timestamps[0]} to {timestamps[-1]}")

@@ -10,7 +10,7 @@ data:
   - 60
   - 120
   processed_data_path: /home/thoth/dpn/predictive-autoscaling/data/processed
-  raw_data_path: /home/thoth/dpn/predictive-autoscaling/data/raw
+  raw_data_path: /home/thoth/dpn/predictive-autoscaling/data/raw/metrics
   stride: 4
   test_split: 0.15
   train_split: 0.7
@@ -18,15 +18,8 @@ data:
   window_size: 240
 metric_name: cpu
 model:
-  arima_order: !!python/tuple
-  - 1
-  - 1
-  - 1
-  arima_seasonal_order: !!python/tuple
-  - 0
-  - 0
-  - 0
-  - 0
+  arima_order: [1, 1, 1]
+  arima_seasonal_order: [0, 0, 0, 0]
   bidirectional: true
   dropout: 0.3
   hidden_size: 128

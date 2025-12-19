@@ -209,7 +209,7 @@ if __name__ == "__main__":
     X_val = np.random.randn(20, 240, 8) * 50 + 100
     y_train = np.random.randn(100, 60) * 20 + 50
 
-    print(f"Before normalization:")
+    print("Before normalization:")
     print(f"  X_train range: [{X_train.min():.2f}, {X_train.max():.2f}]")
     print(f"  X_train mean: {X_train.mean():.2f}")
     print(f"  y_train range: [{y_train.min():.2f}, {y_train.max():.2f}]")

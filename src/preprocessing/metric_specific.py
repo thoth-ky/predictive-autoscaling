@@ -6,19 +6,17 @@ Handle preprocessing for different container metrics (CPU, memory, disk, network
 from enum import Enum
 from typing import Optional
 import pandas as pd
-import numpy as np
 
 
 class MetricType(Enum):
     """Enumeration of supported container metrics."""
 
     CPU = "container_cpu_rate"
-    MEMORY = "container_memory"
-    MEMORY_USAGE = "memory_usage"
-    DISK_READS = "container_fs_reads"
-    DISK_WRITES = "container_fs_writes"
-    NETWORK_RX = "container_network_rx"
-    NETWORK_TX = "container_network_tx"
+    MEMORY = "container_memory_usage"
+    DISK_READS = "container_fs_reads_rate"
+    DISK_WRITES = "container_fs_writes_rate"
+    NETWORK_RX = "container_network_receive_rate"
+    NETWORK_TX = "container_network_transmit_rate"
 
     @classmethod
     def from_string(cls, metric_name: str):
@@ -56,7 +54,7 @@ class MetricPreprocessor:
         self.metric_type = metric_type
         self.config = config or {}
         self.outlier_threshold = self.config.get("outlier_threshold", 3.0)
-        self.resample_freq = self.config.get("resample_freq", "15S")
+        self.resample_freq = self.config.get("resample_freq", "15s")
 
     def process(
         self,
@@ -98,27 +96,20 @@ class MetricPreprocessor:
     def _filter_data(
         self, df: pd.DataFrame, container_name: str, service_col: str
     ) -> pd.DataFrame:
-        """Filter DataFrame for specific metric and container."""
-        # Try different column names for metric identification
-        metric_col = None
-        for col in ["metric_name", "metric", "__name__"]:
-            if col in df.columns:
-                metric_col = col
-                break
+        """Filter DataFrame for specific container using container_labels."""
+        if "container_labels" not in df.columns:
+            raise ValueError("DataFrame must have 'container_labels' column")
 
-        if metric_col is None:
-            raise ValueError("Could not find metric column in DataFrame")
+        # If no specific container requested, return all data
+        if not container_name or container_name == "all":
+            return df
 
-        # Filter by metric
-        mask = df[metric_col].str.contains(self.metric_type.value, case=False, na=False)
-
-        # Filter by container/service
-        if service_col in df.columns:
-            mask &= df[service_col].str.contains(container_name, case=False, na=False)
-        elif "container_name" in df.columns:
-            mask &= df["container_name"].str.contains(
-                container_name, case=False, na=False
-            )
+        # Filter by container name in the labels
+        mask = df["container_labels"].str.contains(
+            f"container={container_name}", case=False, na=False
+        ) | df["container_labels"].str.contains(
+            f"pod={container_name}", case=False, na=False
+        )
 
         return df[mask]
 
@@ -139,7 +130,7 @@ class MetricPreprocessor:
             # Clip to valid range
             df["value"] = df["value"].clip(lower=0, upper=100)
 
-        elif self.metric_type in [MetricType.MEMORY, MetricType.MEMORY_USAGE]:
+        elif self.metric_type in [MetricType.MEMORY]:
             # Convert bytes to MB for easier interpretation
             df["value"] = df["value"] / (1024**2)
             df["value"] = df["value"].clip(lower=0)
@@ -205,9 +196,8 @@ class MetricPreprocessor:
         if self.outlier_threshold is None:
             return df
 
-        values = df["value"].values
-        mean = values.mean()
-        std = values.std()
+        mean = float(df["value"].mean())
+        std = float(df["value"].std())
 
         if std == 0:
             return df  # No variation, no outliers
@@ -257,9 +247,9 @@ if __name__ == "__main__":
     print("Metric-Specific Preprocessing Module")
     print("=" * 60)
 
-    # Find latest data file
+    # Find latest data files
     data_files = glob.glob(
-        "/home/thoth/dpn/predictive-autoscaling/data/raw/metrics_*.csv"
+        "/home/thoth/dpn/predictive-autoscaling/data/raw/metrics/container_*.csv"
     )
 
     if data_files:

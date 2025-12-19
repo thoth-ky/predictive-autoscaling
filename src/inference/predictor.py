@@ -5,15 +5,12 @@ Load and run inference with trained models for all metrics.
 
 import torch
 import numpy as np
-import pandas as pd
-from typing import Dict, Optional, List
+from typing import Dict
 import os
-import glob
 
 from src.models.lstm.lstm_model import LSTMPredictor
 from src.models.statistical.arima_model import ARIMAPredictor
 from src.models.statistical.prophet_model import ProphetPredictor
-from src.models.utils.normalizers import TimeSeriesNormalizer
 
 
 class SingleMetricPredictor:
@@ -79,7 +76,7 @@ class SingleMetricPredictor:
         self.X_scaler = checkpoint.get("X_scaler")
         self.y_scaler = checkpoint.get("y_scaler", {})
 
-        print(f"  Model loaded successfully")
+        print("  Model loaded successfully")
         print(f"  Best validation loss: {checkpoint.get('val_loss', 'N/A')}")
 
     def _load_statistical(self):
@@ -96,7 +93,7 @@ class SingleMetricPredictor:
         else:  # prophet
             self.model = ProphetPredictor.load_model(model_path)
 
-        print(f"  Model loaded successfully")
+        print("  Model loaded successfully")
 
     def predict(self, X: np.ndarray, horizon: int = 60) -> np.ndarray:
         """
@@ -148,9 +145,6 @@ class SingleMetricPredictor:
         predictions = []
 
         for i in range(n_samples):
-            # Get the last value from the window as current state
-            current_value = X[i, -1, 0]
-
             # Predict
             pred = self.model.predict(horizon)
 
@@ -170,8 +164,6 @@ class SingleMetricPredictor:
         """
         if self.model_type == "lstm":
             # LSTM can predict all horizons at once
-            horizons = self.config.data.prediction_horizons
-
             # Normalize
             X_norm = self.X_scaler.transform(X) if self.X_scaler else X
             X_tensor = torch.FloatTensor(X_norm).to(self.device)

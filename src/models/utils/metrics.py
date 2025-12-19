@@ -5,7 +5,7 @@ Comprehensive metrics for measuring prediction performance.
 
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 
 class ModelEvaluator:
@@ -217,9 +217,9 @@ class ModelEvaluator:
             y_true_dict: True values per horizon
             y_pred_dict: Predictions per horizon
         """
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Evaluation Report: {self.metric_name}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         results = self.horizon_analysis(y_true_dict, y_pred_dict)
 
@@ -253,7 +253,7 @@ class ModelEvaluator:
                 f"  MAE increase per minute: {results['degradation']['mae_per_minute']:.4f}"
             )
 
-        print(f"\n{'='*60}\n")
+        print(f"\n{'=' * 60}\n")
 
 
 def evaluate_model(

@@ -8,7 +8,6 @@ It prepares features (X) and targets (y) for predicting future resource usage.
 import pandas as pd
 import numpy as np
 from typing import Tuple, List, Optional
-from datetime import timedelta
 
 
 class TimeSeriesWindowGenerator:
@@ -126,7 +125,6 @@ class TimeSeriesWindowGenerator:
 
         # Extract features and target
         X_data = df[feature_columns].values
-        y_data = df[target_column].values.reshape(-1, 1)
         timestamps = pd.DatetimeIndex(df[timestamp_column])
 
         # Create sequences
@@ -547,7 +545,7 @@ def create_multi_horizon_features_and_windows(
 
     print(f"✅ Created {len(X)} windows with multiple horizons")
     print(f"   Input shape: {X.shape} (samples, timesteps, features)")
-    print(f"   Target horizons:")
+    print("   Target horizons:")
     for h, y in y_dict.items():
         horizon_minutes = h // 4
         print(f"     {horizon_minutes} min ({h} steps): {y.shape}")

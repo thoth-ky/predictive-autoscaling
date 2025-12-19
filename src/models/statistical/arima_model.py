@@ -4,7 +4,6 @@ Statistical baseline for comparison with deep learning models.
 """
 
 import numpy as np
-import pandas as pd
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from typing import Optional, Dict, Tuple
@@ -169,7 +168,7 @@ class AutoARIMA(StatisticalBaseModel):
                             self.best_order = (p, d, q)
                             self.model = model
 
-                    except:
+                    except Exception:
                         continue
 
         if self.model is None:
@@ -248,7 +247,7 @@ if __name__ == "__main__":
     y_train = y[:train_size]
     y_test = y[train_size:]
 
-    print(f"\nData:")
+    print("\nData:")
     print(f"  Total length: {n}")
     print(f"  Train size: {len(y_train)}")
     print(f"  Test size: {len(y_test)}")

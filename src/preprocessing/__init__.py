@@ -14,12 +14,9 @@ from src.preprocessing.sliding_windows import (
 )
 from src.preprocessing.data_splitter import (
     split_temporal_data,
-    create_temporal_folds,
 )
 from src.preprocessing.metric_specific import (
     prepare_metric_data,
-    get_metric_column_name,
-    METRIC_MAPPINGS,
 )
 
 __all__ = [
@@ -33,9 +30,6 @@ __all__ = [
     "create_multi_horizon_features_and_windows",
     # Data splitting
     "split_temporal_data",
-    "create_temporal_folds",
     # Metric-specific preprocessing
     "prepare_metric_data",
-    "get_metric_column_name",
-    "METRIC_MAPPINGS",
 ]

@@ -4,19 +4,17 @@ Unified training pipeline for all metric models (LSTM, ARIMA, Prophet).
 """
 
 import torch
-import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import pandas as pd
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 import os
-from tqdm import tqdm
 
 # Local imports
 from src.models.lstm.lstm_model import LSTMPredictor
 from src.models.statistical.arima_model import ARIMAPredictor
 from src.models.statistical.prophet_model import ProphetPredictor
-from src.models.utils.losses import MultiHorizonLoss, get_loss_function
+from src.models.utils.losses import MultiHorizonLoss
 from src.models.utils.metrics import ModelEvaluator
 from src.models.utils.normalizers import TimeSeriesNormalizer
 from src.training.callbacks import EarlyStopping, ModelCheckpoint
@@ -177,7 +175,7 @@ class MetricTrainer:
                 base_loss=self.config.training.loss_function,
             )
 
-            print(f"\nModel: LSTM")
+            print("\nModel: LSTM")
             print(
                 f"  Parameters: {self.model.get_model_info()['trainable_parameters']:,}"
             )
@@ -260,9 +258,9 @@ class MetricTrainer:
 
     def train_lstm(self):
         """Train LSTM model with early stopping and checkpointing."""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Training LSTM for {self.metric_name}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # Create data loaders
         train_loader, val_loader = create_data_loaders(
@@ -321,7 +319,7 @@ class MetricTrainer:
 
             # Print progress
             if epoch % self.config.training.log_interval == 0 or epoch == 0:
-                print(f"\nEpoch {epoch+1}/{self.config.training.epochs}")
+                print(f"\nEpoch {epoch + 1}/{self.config.training.epochs}")
                 print(f"  Train Loss: {train_loss:.6f}")
                 print(f"  Val Loss: {val_loss:.6f}")
 
@@ -340,7 +338,7 @@ class MetricTrainer:
 
             # Early stopping
             if early_stop(val_loss, epoch):
-                print(f"\nEarly stopping at epoch {epoch+1}")
+                print(f"\nEarly stopping at epoch {epoch + 1}")
                 break
 
         # Load best model
@@ -350,15 +348,15 @@ class MetricTrainer:
         if self.use_mlflow:
             self.mlflow.end_run()
 
-        print(f"\n{'='*60}")
-        print(f"Training Complete!")
-        print(f"{'='*60}")
+        print(f"\n{'=' * 60}")
+        print("Training Complete!")
+        print(f"{'=' * 60}")
 
     def train_statistical(self):
         """Train statistical model (ARIMA or Prophet)."""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Training {self.model_type.upper()} for {self.metric_name}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # For statistical models, use the raw sequence data
         # We'll use only the first feature if multivariate
@@ -414,9 +412,9 @@ class MetricTrainer:
             X_test = self.X_test
             y_test_dict = self.y_test_dict
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Evaluating {self.model_type.upper()} on {self.metric_name}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         if self.model_type == "lstm":
             # LSTM evaluation

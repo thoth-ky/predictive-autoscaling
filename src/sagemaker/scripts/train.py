@@ -27,12 +27,12 @@ SM_OUTPUT_DATA_DIR = os.environ.get("SM_OUTPUT_DATA_DIR", "/opt/ml/output/data")
 # Add src to path
 sys.path.insert(0, "/opt/ml/code/src")
 
-from src.models.lstm.lstm_model import LSTMPredictor
-from src.models.utils.losses import MultiHorizonLoss
-from src.models.utils.normalizers import TimeSeriesNormalizer
-from src.training.callbacks import EarlyStopping, ModelCheckpoint
-from src.training.data_loaders import create_data_loaders
-from src.config.base_config import ModelConfig, TrainingConfig, DataConfig
+from src.models.lstm.lstm_model import LSTMPredictor  # noqa: E402
+from src.models.utils.losses import MultiHorizonLoss  # noqa: E402
+from src.models.utils.normalizers import TimeSeriesNormalizer  # noqa: E402
+from src.training.callbacks import EarlyStopping  # noqa: E402
+from src.training.data_loaders import create_data_loaders  # noqa: E402
+from src.config.base_config import ModelConfig  # noqa: E402
 
 
 def parse_args():
@@ -251,7 +251,7 @@ def train(args):
 
         # Log metrics (SageMaker captures these prints)
         print(
-            f"Epoch {epoch+1}: Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}"
+            f"Epoch {epoch + 1}: Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}"
         )
         print(f"Val RMSE: {np.sqrt(val_loss):.6f}")
 
@@ -261,7 +261,7 @@ def train(args):
 
         # Early stopping
         if early_stop(val_loss, epoch):
-            print(f"Early stopping at epoch {epoch+1}")
+            print(f"Early stopping at epoch {epoch + 1}")
             break
 
     # Save model

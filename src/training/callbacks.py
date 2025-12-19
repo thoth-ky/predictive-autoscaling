@@ -85,9 +85,9 @@ class EarlyStopping:
             if self.counter >= self.patience:
                 self.early_stop = True
                 if self.verbose:
-                    print(f"\n  Early stopping triggered after {epoch+1} epochs")
+                    print(f"\n  Early stopping triggered after {epoch + 1} epochs")
                     print(
-                        f"  Best score: {self.best_score:.6f} at epoch {self.best_epoch+1}"
+                        f"  Best score: {self.best_score:.6f} at epoch {self.best_epoch + 1}"
                     )
                 return True
 
@@ -172,7 +172,7 @@ class ModelCheckpoint:
         # Periodic checkpoint
         if self.save_every is not None and (epoch + 1) % self.save_every == 0:
             periodic_path = os.path.join(
-                self.checkpoint_dir, f"checkpoint_epoch_{epoch+1}.pth"
+                self.checkpoint_dir, f"checkpoint_epoch_{epoch + 1}.pth"
             )
             self._save_checkpoint(
                 periodic_path, model, optimizer, epoch, current_score, additional_info
@@ -228,7 +228,7 @@ class ModelCheckpoint:
             optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
         if self.verbose:
-            print(f"Loaded best model from epoch {checkpoint['epoch']+1}")
+            print(f"Loaded best model from epoch {checkpoint['epoch'] + 1}")
             print(f"  Best {self.metric_name}: {checkpoint['best_score']:.6f}")
 
         return checkpoint
@@ -316,7 +316,7 @@ if __name__ == "__main__":
     val_losses = [1.0, 0.95, 0.92, 0.91, 0.905, 0.904, 0.903]
 
     for epoch, loss in enumerate(val_losses):
-        print(f"Epoch {epoch+1}, Val Loss: {loss:.3f}")
+        print(f"Epoch {epoch + 1}, Val Loss: {loss:.3f}")
         should_stop = early_stop(loss, epoch)
         if should_stop:
             print("Training would stop here!")
@@ -336,7 +336,7 @@ if __name__ == "__main__":
         dummy_optimizer = torch.optim.Adam(dummy_model.parameters())
 
         for epoch, loss in enumerate([1.0, 0.8, 0.9, 0.7, 0.75]):
-            print(f"\nEpoch {epoch+1}, Val Loss: {loss:.3f}")
+            print(f"\nEpoch {epoch + 1}, Val Loss: {loss:.3f}")
             checkpoint(dummy_model, dummy_optimizer, epoch, loss)
 
         # Test loading

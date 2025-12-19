@@ -140,7 +140,7 @@ if __name__ == "__main__":
     X = np.random.randn(n_samples, window_size, n_features)
     y_dict = {h: np.random.randn(n_samples, h) for h in horizons}
 
-    print(f"Creating dataset with:")
+    print("Creating dataset with:")
     print(f"  Samples: {n_samples}")
     print(f"  Window size: {window_size}")
     print(f"  Features: {n_features}")
@@ -153,7 +153,7 @@ if __name__ == "__main__":
 
     # Test getting a sample
     x, y = dataset[0]
-    print(f"\nSample 0:")
+    print("\nSample 0:")
     print(f"  X shape: {x.shape}")
     for h in horizons:
         print(f"  y[{h}] shape: {y[h].shape}")
@@ -161,12 +161,12 @@ if __name__ == "__main__":
     # Create data loader
     loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-    print(f"\nData loader:")
+    print("\nData loader:")
     print(f"  Batches: {len(loader)}")
 
     # Test one batch
     for batch_x, batch_y in loader:
-        print(f"\nFirst batch:")
+        print("\nFirst batch:")
         print(f"  X shape: {batch_x.shape}")
         for h in horizons:
             print(f"  y[{h}] shape: {batch_y[h].shape}")

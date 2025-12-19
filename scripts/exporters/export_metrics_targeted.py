@@ -2,12 +2,10 @@
 """
 Kubernetes metrics export for container monitoring via Prometheus
 """
-import json
 import requests
 from datetime import datetime, timedelta
 import csv
 import os
-import re
 
 
 class KubernetesMetricsExporter:
@@ -25,15 +23,33 @@ class KubernetesMetricsExporter:
 
         # Define metric query templates
         self.metric_queries = {
-            "container_cpu_rate": 'rate(container_cpu_usage_seconds_total{id=~"/kubepods.*"}[1m])',
-            "container_memory_usage": 'container_memory_usage_bytes{id=~"/kubepods.*"}',
-            "container_memory_limit": 'container_spec_memory_limit_bytes{id=~"/kubepods.*"}',
-            "container_network_receive_rate": 'rate(container_network_receive_bytes_total{id=~"/kubepods.*"}[1m])',
-            "container_network_transmit_rate": 'rate(container_network_transmit_bytes_total{id=~"/kubepods.*"}[1m])',
-            "container_fs_reads_rate": 'rate(container_fs_reads_total{id=~"/kubepods.*"}[1m])',
-            "container_fs_writes_rate": 'rate(container_fs_writes_total{id=~"/kubepods.*"}[1m])',
-            "container_fs_read_bytes_rate": 'rate(container_fs_read_bytes_total{id=~"/kubepods.*"}[1m])',
-            "container_fs_write_bytes_rate": 'rate(container_fs_write_bytes_total{id=~"/kubepods.*"}[1m])',
+            "container_cpu_rate": (
+                'rate(container_cpu_usage_seconds_total{id=~"/kubepods.*"}[1m])'
+            ),
+            "container_memory_usage": (
+                'container_memory_usage_bytes{id=~"/kubepods.*"}'
+            ),
+            "container_memory_limit": (
+                'container_spec_memory_limit_bytes{id=~"/kubepods.*"}'
+            ),
+            "container_network_receive_rate": (
+                'rate(container_network_receive_bytes_total{id=~"/kubepods.*"}[1m])'
+            ),
+            "container_network_transmit_rate": (
+                "rate(container_network_transmit_bytes_total" '{id=~"/kubepods.*"}[1m])'
+            ),
+            "container_fs_reads_rate": (
+                'rate(container_fs_reads_total{id=~"/kubepods.*"}[1m])'
+            ),
+            "container_fs_writes_rate": (
+                'rate(container_fs_writes_total{id=~"/kubepods.*"}[1m])'
+            ),
+            "container_fs_read_bytes_rate": (
+                'rate(container_fs_read_bytes_total{id=~"/kubepods.*"}[1m])'
+            ),
+            "container_fs_write_bytes_rate": (
+                'rate(container_fs_write_bytes_total{id=~"/kubepods.*"}[1m])'
+            ),
         }
 
     def test_connection(self):
@@ -105,7 +121,9 @@ class KubernetesMetricsExporter:
 
         return ",".join([f"{k}={v}" for k, v in sorted(filtered_labels.items())])
 
-    def export_metrics(self, seconds=900, output_dir="./data/raw/metrics", all=False):
+    def export_metrics(  # noqa: C901
+        self, seconds=900, output_dir="./data/raw/metrics", all=False
+    ):
         """Export configurable metrics for ALL Kubernetes containers"""
         if not self.test_connection():
             return None
@@ -161,7 +179,7 @@ class KubernetesMetricsExporter:
                 data = result["data"]["result"]
 
                 if not data:
-                    print(f"   ⚠️  No data returned")
+                    print("   ⚠️  No data returned")
                     continue
 
                 # Prepare data for CSV
@@ -220,7 +238,7 @@ class KubernetesMetricsExporter:
 
                 file_size_mb = os.path.getsize(output_file) / 1024 / 1024
 
-                print(f"\n✅ Export complete!")
+                print("\n✅ Export complete!")
                 print(f"   Total records: {len(csv_data):,}")
                 print(f"   File size: {file_size_mb:.2f} MB")
                 print(f"   Saved to: {output_file}")
@@ -239,7 +257,7 @@ class KubernetesMetricsExporter:
                             if label.startswith("container="):
                                 container_name = label
                                 break
-                        print(f"   {i+1}: {container_name}")
+                        print(f"   {i + 1}: {container_name}")
                     if len(unique_containers) > 5:
                         print(f"   ... and {len(unique_containers) - 5} more")
 

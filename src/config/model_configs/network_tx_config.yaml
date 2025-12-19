@@ -18,15 +18,8 @@ data:
   window_size: 240
 metric_name: network_tx
 model:
-  arima_order: !!python/tuple
-  - 1
-  - 1
-  - 1
-  arima_seasonal_order: !!python/tuple
-  - 0
-  - 0
-  - 0
-  - 0
+  arima_order: [1, 1, 1]
+  arima_seasonal_order: [0, 0, 0, 0]
   bidirectional: false
   dropout: 0.3
   hidden_size: 96

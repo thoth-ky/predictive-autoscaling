@@ -13,32 +13,37 @@ import argparse
 import sys
 import os
 import glob
+from typing import Optional
 import pandas as pd
 import numpy as np
 
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.config.base_config import load_config, create_default_config
-from src.preprocessing.metric_specific import prepare_metric_data
-from src.preprocessing.sliding_windows import create_multi_horizon_features_and_windows
-from src.preprocessing.data_splitter import split_temporal_data
-from src.training.metric_trainer import MetricTrainer
+from src.config.base_config import load_config, create_default_config  # noqa: E402
+from src.preprocessing.metric_specific import prepare_metric_data  # noqa: E402
+from src.preprocessing.sliding_windows import (  # noqa: E402
+    create_multi_horizon_features_and_windows,
+)
+from src.preprocessing.data_splitter import split_temporal_data  # noqa: E402
+from src.training.metric_trainer import MetricTrainer  # noqa: E402
 
 
-def find_latest_data_file(data_dir: str = "data/raw") -> str:
+def find_latest_data_file(data_dir: str = "data/raw/metrics") -> str:
     """Find the most recent metrics CSV file."""
-    data_pattern = os.path.join(data_dir, "metrics_*.csv")
+    data_pattern = os.path.join(data_dir, "*.csv")
     data_files = glob.glob(data_pattern)
 
     if not data_files:
         raise FileNotFoundError(
             f"No metrics data found in {data_dir}. "
             f"Please run a metrics export script first:\n"
-            f"  cd scripts && python export_metrics_simple.py --seconds 900"
+            f"  python scripts/exporters/export_metrics_targeted.py"
         )
 
-    latest_file = max(data_files)
+    latest_file = max(
+        data_files
+    )  # TODO: get better identification of most relevant file if multiple raw metrics are available
     return latest_file
 
 
@@ -55,7 +60,7 @@ def prepare_training_data(
     Args:
         metric_name: Name of metric to train on
         container_name: Container to analyze
-        data_file: Path to CSV data file (auto-detects if None)
+        data_file: Path to CSV data file
         window_size_minutes: Lookback window in minutes
         prediction_horizons_minutes: List of prediction horizons in minutes
 
@@ -67,7 +72,12 @@ def prepare_training_data(
 
     # Load data
     if data_file is None:
-        data_file = find_latest_data_file()
+        # TODO: Automatic latest file detection is not currently supported
+        raise NotImplementedError(
+            "Automatic data file selection is not currently supported. "
+            "Please specify a data file using the --data-file argument."
+        )
+        # data_file = find_latest_data_file()
 
     print(f"\nLoading data from: {data_file}")
     df = pd.read_csv(data_file)
@@ -82,7 +92,7 @@ def prepare_training_data(
     )
 
     # Create features and windows
-    print(f"\nCreating features and windows...")
+    print("\nCreating features and windows...")
     X, y_dict, feature_names, metadata = create_multi_horizon_features_and_windows(
         processed,
         container_name=container_name,
@@ -96,12 +106,12 @@ def prepare_training_data(
     )
 
     # Split data temporally
-    print(f"\nSplitting data (70% train, 15% val, 15% test)...")
+    print("\nSplitting data (70% train, 15% val, 15% test)...")
     X_train, X_val, X_test, y_train_dict, y_val_dict, y_test_dict = split_temporal_data(
         X, y_dict, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15
     )
 
-    print(f"\nData preparation complete!")
+    print("\nData preparation complete!")
     print(f"  Training samples: {len(X_train):,}")
     print(f"  Validation samples: {len(X_val):,}")
     print(f"  Test samples: {len(X_test):,}")
@@ -109,23 +119,27 @@ def prepare_training_data(
     return X_train, y_train_dict, X_val, y_val_dict, X_test, y_test_dict
 
 
-def main():
+def main():  # noqa: C901
     parser = argparse.ArgumentParser(
         description="Train time series models for container metrics",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Train LSTM model for CPU
-  python scripts/train_local.py --metric cpu --model-type lstm
+  python scripts/train_local.py --metric cpu --model-type lstm \\
+      --data-file data/raw/metrics_20251210.csv
 
   # Train ARIMA for memory
-  python scripts/train_local.py --metric memory --model-type arima
+  python scripts/train_local.py --metric memory --model-type arima \\
+      --data-file data/raw/metrics_20251210.csv
 
   # Train Prophet for network with custom config
-  python scripts/train_local.py --metric network_rx --model-type prophet --config custom.yaml
+  python scripts/train_local.py --metric network_rx --model-type prophet \\
+      --config custom.yaml --data-file data/raw/metrics_20251210.csv
 
   # Train with custom data file
-  python scripts/train_local.py --metric cpu --data-file data/raw/metrics_20251210.csv
+  python scripts/train_local.py --metric cpu \\
+      --data-file data/raw/metrics_20251210.csv
         """,
     )
 
@@ -159,7 +173,7 @@ Examples:
     parser.add_argument(
         "--data-file",
         type=str,
-        help="Path to metrics CSV file (auto-detects latest if not specified)",
+        help="Path to metrics CSV file",
     )
 
     parser.add_argument(
@@ -218,7 +232,7 @@ Examples:
         print(f"\nError preparing data: {e}")
         print("\nPlease ensure you have metrics data available.")
         print("Run one of the export scripts first:")
-        print("  cd scripts && python export_metrics_simple.py --seconds 900")
+        print("  python scripts/exporters/export_metrics_targeted.py")
         sys.exit(1)
 
     # Create trainer

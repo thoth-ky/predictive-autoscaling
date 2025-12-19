@@ -9,3 +9,7 @@ venv
 
 .claude/
 mlflow.db
+mlruns
+experiments
+logs/
+src/predictive_autoscaling.egg-info

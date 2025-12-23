@@ -478,6 +478,7 @@ class MultiHorizonWindowGenerator:
         data: np.ndarray,
         container_ids: np.ndarray,
         timestamps: Optional[pd.DatetimeIndex] = None,
+        container_id_to_name: Optional[dict] = None,
     ) -> Tuple:
         """
         Create windows that respect container boundaries for multi-container training.
@@ -488,7 +489,8 @@ class MultiHorizonWindowGenerator:
         Args:
             data: Time series data (1D or 2D array)
             container_ids: Container ID for each timestep (1D array, same length as data)
-            timestamps: Optional timestamps
+            timestamps: Optional timestamps for each data point
+            container_id_to_name: Optional mapping from container IDs to names for better logging
 
         Returns:
             X: Input sequences (n_windows, window_size, n_features)
@@ -533,6 +535,13 @@ class MultiHorizonWindowGenerator:
 
         # Process each container separately
         for container_id in unique_containers:
+            # Get container name for logging (use name if available, else ID)
+            container_display = (
+                container_id_to_name.get(container_id, f"ID_{container_id}")
+                if container_id_to_name
+                else str(container_id)
+            )
+
             # Get indices for this container
             container_mask = container_ids == container_id
             container_indices = np.where(container_mask)[0]
@@ -541,7 +550,7 @@ class MultiHorizonWindowGenerator:
             # Container data should be contiguous or have small gaps
             if len(container_indices) < self.window_size + max_horizon:
                 print(
-                    f"  Warning: Container {container_id} has only "
+                    f"  Warning: Container '{container_display}' has only "
                     f"{len(container_indices)} timesteps, skipping "
                     f"(need {self.window_size + max_horizon})"
                 )
@@ -549,9 +558,10 @@ class MultiHorizonWindowGenerator:
 
             # Extract data for this container
             container_data = data[container_mask]
-            container_timestamps = (
-                timestamps[container_mask] if timestamps is not None else None
-            )
+            container_timestamps = None
+            if timestamps is not None:
+                # Reset index to ensure integer-based indexing works in create_multi_horizon_sequences
+                container_timestamps = timestamps[container_mask].reset_index(drop=True)
 
             # Create windows for this container using existing method
             try:
@@ -577,12 +587,12 @@ class MultiHorizonWindowGenerator:
                     all_window_timestamps.extend(timestamps_container)
 
                 print(
-                    f"    Container {container_id}: {n_windows_container} windows created"
+                    f"    Container '{container_display}': {n_windows_container} windows created"
                 )
 
             except ValueError as e:
                 print(
-                    f"  Warning: Could not create windows for container {container_id}: {e}"
+                    f"  Warning: Could not create windows for container '{container_display}': {e}"
                 )
                 continue
 

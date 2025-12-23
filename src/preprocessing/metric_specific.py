@@ -78,13 +78,13 @@ def extract_container_name(container_labels: str) -> str:
 
 def build_container_vocabulary(df: pd.DataFrame) -> ContainerVocabulary:
     """
-    Build container vocabulary from DataFrame with container_labels.
+    Build container vocabulary from DataFrame.
 
     Extracts all unique container names and creates a vocabulary mapping
     container names to numeric IDs for embedding layers.
 
     Args:
-        df: DataFrame with 'container_labels' column
+        df: DataFrame with either 'container_labels' or 'container_name' column
 
     Returns:
         ContainerVocabulary with all unique containers
@@ -95,12 +95,17 @@ def build_container_vocabulary(df: pd.DataFrame) -> ContainerVocabulary:
         >>> vocab.num_containers
         5
     """
-    if "container_labels" not in df.columns:
-        raise ValueError("DataFrame must have 'container_labels' column")
-
-    # Extract container names
-    container_names = df["container_labels"].apply(extract_container_name)
-    unique_containers = sorted(container_names.unique())
+    # Try to use already-extracted container_name column first
+    if "container_name" in df.columns:
+        unique_containers = sorted(df["container_name"].unique())
+    elif "container_labels" in df.columns:
+        # Fall back to extracting from container_labels
+        container_names = df["container_labels"].apply(extract_container_name)
+        unique_containers = sorted(container_names.unique())
+    else:
+        raise ValueError(
+            "DataFrame must have either 'container_name' or 'container_labels' column"
+        )
 
     # Build vocabulary
     vocab = ContainerVocabulary()

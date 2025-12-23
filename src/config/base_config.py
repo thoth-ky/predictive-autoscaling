@@ -52,6 +52,11 @@ class ModelConfig:
     dropout: float = 0.2
     bidirectional: bool = False
 
+    # Container embedding parameters (for multi-container training)
+    use_container_embeddings: bool = False
+    num_containers: int = 1
+    container_embedding_dim: int = 8
+
     # Statistical model parameters (ARIMA)
     arima_order: tuple = (1, 1, 1)  # (p, d, q)
     arima_seasonal_order: tuple = (0, 0, 0, 0)  # (P, D, Q, s)

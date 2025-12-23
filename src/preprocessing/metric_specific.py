@@ -4,8 +4,10 @@ Handle preprocessing for different container metrics (CPU, memory, disk, network
 """
 
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
 import pandas as pd
+import re
+from src.preprocessing.container_vocabulary import ContainerVocabulary
 
 
 class MetricType(Enum):
@@ -30,6 +32,117 @@ class MetricType(Enum):
             "network_tx": cls.NETWORK_TX,
         }
         return mapping.get(metric_name.lower(), cls.CPU)
+
+
+def extract_container_name(container_labels: str) -> str:
+    """
+    Extract container name from Prometheus compressed labels string.
+
+    Parses labels like 'container=webapp,pod=test-pod,namespace=default'
+    and extracts the container name.
+
+    Args:
+        container_labels: Comma-separated key=value pairs from Prometheus
+
+    Returns:
+        Container name (e.g., 'webapp')
+
+    Raises:
+        ValueError: If container label not found
+
+    Example:
+        >>> extract_container_name('container=webapp,pod=test,namespace=default')
+        'webapp'
+    """
+    if pd.isna(container_labels) or not container_labels:
+        raise ValueError("Container labels cannot be empty")
+
+    # Try to match container= pattern
+    container_match = re.search(r"container=([^,]+)", container_labels, re.IGNORECASE)
+    if container_match:
+        return container_match.group(1).strip()
+
+    # Fallback: try pod= pattern
+    pod_match = re.search(r"pod=([^,]+)", container_labels, re.IGNORECASE)
+    if pod_match:
+        # Extract container name from pod name (e.g., 'webapp-abc123' -> 'webapp')
+        pod_name = pod_match.group(1).strip()
+        # Remove trailing hash/ID if present
+        base_name = re.sub(r"-[a-f0-9]+$", "", pod_name)
+        return base_name
+
+    raise ValueError(
+        f"Could not extract container name from labels: {container_labels}"
+    )
+
+
+def build_container_vocabulary(df: pd.DataFrame) -> ContainerVocabulary:
+    """
+    Build container vocabulary from DataFrame with container_labels.
+
+    Extracts all unique container names and creates a vocabulary mapping
+    container names to numeric IDs for embedding layers.
+
+    Args:
+        df: DataFrame with 'container_labels' column
+
+    Returns:
+        ContainerVocabulary with all unique containers
+
+    Example:
+        >>> df = pd.read_csv('metrics.csv')
+        >>> vocab = build_container_vocabulary(df)
+        >>> vocab.num_containers
+        5
+    """
+    if "container_labels" not in df.columns:
+        raise ValueError("DataFrame must have 'container_labels' column")
+
+    # Extract container names
+    container_names = df["container_labels"].apply(extract_container_name)
+    unique_containers = sorted(container_names.unique())
+
+    # Build vocabulary
+    vocab = ContainerVocabulary()
+    for container in unique_containers:
+        vocab.add_container(container)
+
+    return vocab
+
+
+def add_container_ids(
+    df: pd.DataFrame, vocab: ContainerVocabulary
+) -> pd.DataFrame:
+    """
+    Add numeric container_id column using vocabulary.
+
+    Maps container names to numeric IDs for embedding layers.
+    Modifies DataFrame in place by adding 'container_id' column.
+
+    Args:
+        df: DataFrame with 'container_name' column
+        vocab: ContainerVocabulary for mapping
+
+    Returns:
+        DataFrame with added 'container_id' column
+
+    Raises:
+        ValueError: If DataFrame missing 'container_name' column
+        KeyError: If container name not in vocabulary
+
+    Example:
+        >>> vocab = build_container_vocabulary(df)
+        >>> df = add_container_ids(df, vocab)
+        >>> df['container_id'].unique()
+        array([0, 1, 2])
+    """
+    if "container_name" not in df.columns:
+        raise ValueError("DataFrame must have 'container_name' column")
+
+    # Map container names to IDs
+    df["container_id"] = df["container_name"].apply(vocab.get_id)
+
+    return df
 
 
 class MetricPreprocessor:
@@ -96,22 +209,50 @@ class MetricPreprocessor:
     def _filter_data(
         self, df: pd.DataFrame, container_name: str, service_col: str
     ) -> pd.DataFrame:
-        """Filter DataFrame for specific container using container_labels."""
+        """
+        Filter DataFrame for specific container(s) using container_labels.
+
+        Now supports multi-container mode:
+        - If container_name is "all", returns all containers
+        - If container_name is a list, filters to those containers
+        - If container_name is a single string, filters to that container
+
+        Always extracts and adds 'container_name' column from labels.
+        """
         if "container_labels" not in df.columns:
             raise ValueError("DataFrame must have 'container_labels' column")
+
+        # Extract container name from labels and add as column
+        df = df.copy()
+        df["container_name"] = df["container_labels"].apply(extract_container_name)
 
         # If no specific container requested, return all data
         if not container_name or container_name == "all":
             return df
 
-        # Filter by container name in the labels
-        mask = df["container_labels"].str.contains(
-            f"container={container_name}", case=False, na=False
-        ) | df["container_labels"].str.contains(
-            f"pod={container_name}", case=False, na=False
-        )
+        # If list of containers, filter to those containers
+        if isinstance(container_name, list):
+            mask = df["container_name"].isin(container_name)
+            filtered = df[mask]
+            if len(filtered) == 0:
+                raise ValueError(
+                    f"No data found for containers {container_name}. "
+                    f"Available: {df['container_name'].unique().tolist()}"
+                )
+            return filtered
 
-        return df[mask]
+        # Single container - filter by container name
+        mask = df["container_name"] == container_name
+        filtered = df[mask]
+
+        # If exact match failed, try case-insensitive partial match
+        if len(filtered) == 0:
+            mask = df["container_name"].str.contains(
+                container_name, case=False, na=False
+            )
+            filtered = df[mask]
+
+        return filtered
 
     def _metric_specific_transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -152,9 +293,12 @@ class MetricPreprocessor:
         """
         Resample to regular intervals and handle missing values.
 
+        For multi-container data, resamples each container separately to
+        maintain temporal continuity within each container.
+
         Args:
             df: DataFrame with timestamp and value columns
-            container_name: Name of container for metadata
+            container_name: Name of container(s) for metadata
 
         Returns:
             Resampled DataFrame with regular intervals
@@ -165,27 +309,72 @@ class MetricPreprocessor:
 
         df["timestamp"] = pd.to_datetime(df["timestamp"])
 
-        # Set timestamp as index
-        df_indexed = df.set_index("timestamp").sort_index()
+        # Check if this is multi-container data
+        if "container_name" in df.columns and df["container_name"].nunique() > 1:
+            # Multi-container mode: resample each container separately
+            resampled_parts = []
 
-        # Resample to regular intervals (default 15 seconds)
-        resampled = df_indexed["value"].resample(self.resample_freq).mean()
+            for container in df["container_name"].unique():
+                container_df = df[df["container_name"] == container].copy()
 
-        # Forward fill missing values (up to 3 intervals)
-        resampled = resampled.ffill(limit=3)
+                # Resample this container's data
+                container_df = container_df.set_index("timestamp").sort_index()
+                resampled_values = container_df["value"].resample(
+                    self.resample_freq
+                ).mean()
 
-        # Backward fill any remaining NaNs
-        resampled = resampled.bfill(limit=3)
+                # Forward fill missing values (up to 3 intervals)
+                resampled_values = resampled_values.ffill(limit=3)
 
-        # Create clean DataFrame with container and metric information
-        result = pd.DataFrame(
-            {
-                "timestamp": resampled.index,
-                "value": resampled.values,
-                "container_name": container_name,
-                "metric_name": self.metric_type.value,
-            }
-        ).reset_index(drop=True)
+                # Backward fill any remaining NaNs
+                resampled_values = resampled_values.bfill(limit=3)
+
+                # Create DataFrame for this container
+                container_result = pd.DataFrame(
+                    {
+                        "timestamp": resampled_values.index,
+                        "value": resampled_values.values,
+                        "container_name": container,
+                        "metric_name": self.metric_type.value,
+                    }
+                )
+
+                resampled_parts.append(container_result)
+
+            # Combine all containers
+            result = pd.concat(resampled_parts, ignore_index=True)
+            result = result.sort_values(["container_name", "timestamp"])
+            result = result.reset_index(drop=True)
+
+        else:
+            # Single container mode: original logic
+            df_indexed = df.set_index("timestamp").sort_index()
+
+            # Resample to regular intervals (default 15 seconds)
+            resampled = df_indexed["value"].resample(self.resample_freq).mean()
+
+            # Forward fill missing values (up to 3 intervals)
+            resampled = resampled.ffill(limit=3)
+
+            # Backward fill any remaining NaNs
+            resampled = resampled.bfill(limit=3)
+
+            # Get container name from data if available
+            actual_container_name = (
+                df["container_name"].iloc[0]
+                if "container_name" in df.columns
+                else container_name
+            )
+
+            # Create clean DataFrame with container and metric information
+            result = pd.DataFrame(
+                {
+                    "timestamp": resampled.index,
+                    "value": resampled.values,
+                    "container_name": actual_container_name,
+                    "metric_name": self.metric_type.value,
+                }
+            ).reset_index(drop=True)
 
         # Drop any remaining NaNs
         result = result.dropna()
@@ -198,22 +387,44 @@ class MetricPreprocessor:
 
         Uses z-score method: values beyond threshold * std are capped.
         This preserves temporal continuity (doesn't remove data points).
+
+        For multi-container data, calculates outliers per-container to avoid
+        cross-contamination.
         """
         if self.outlier_threshold is None:
             return df
 
-        mean = float(df["value"].mean())
-        std = float(df["value"].std())
+        # Check if multi-container data
+        if "container_name" in df.columns and df["container_name"].nunique() > 1:
+            # Handle outliers per container
+            processed_parts = []
 
-        if std == 0:
-            return df  # No variation, no outliers
+            for container in df["container_name"].unique():
+                container_df = df[df["container_name"] == container].copy()
 
-        # Calculate bounds
-        upper_bound = mean + (self.outlier_threshold * std)
-        lower_bound = max(0, mean - (self.outlier_threshold * std))
+                mean = float(container_df["value"].mean())
+                std = float(container_df["value"].std())
 
-        # Clip outliers instead of removing them
-        df["value"] = df["value"].clip(lower=lower_bound, upper=upper_bound)
+                if std > 0:  # Only clip if there's variation
+                    upper_bound = mean + (self.outlier_threshold * std)
+                    lower_bound = max(0, mean - (self.outlier_threshold * std))
+                    container_df["value"] = container_df["value"].clip(
+                        lower=lower_bound, upper=upper_bound
+                    )
+
+                processed_parts.append(container_df)
+
+            # Combine all containers
+            df = pd.concat(processed_parts, ignore_index=True)
+        else:
+            # Single container mode: original logic
+            mean = float(df["value"].mean())
+            std = float(df["value"].std())
+
+            if std > 0:  # Only clip if there's variation
+                upper_bound = mean + (self.outlier_threshold * std)
+                lower_bound = max(0, mean - (self.outlier_threshold * std))
+                df["value"] = df["value"].clip(lower=lower_bound, upper=upper_bound)
 
         return df
 

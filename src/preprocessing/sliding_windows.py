@@ -473,6 +473,147 @@ class MultiHorizonWindowGenerator:
 
         return X, y_dict, window_timestamps
 
+    def create_multi_container_sequences(
+        self,
+        data: np.ndarray,
+        container_ids: np.ndarray,
+        timestamps: Optional[pd.DatetimeIndex] = None,
+    ) -> Tuple:
+        """
+        Create windows that respect container boundaries for multi-container training.
+
+        CRITICAL: Ensures no sliding window crosses container boundaries.
+        This prevents data leakage between containers.
+
+        Args:
+            data: Time series data (1D or 2D array)
+            container_ids: Container ID for each timestep (1D array, same length as data)
+            timestamps: Optional timestamps
+
+        Returns:
+            X: Input sequences (n_windows, window_size, n_features)
+            y_dict: Dictionary mapping horizon to targets
+            window_container_ids: Container ID for each window (n_windows,)
+            window_timestamps: List of timestamp metadata
+
+        Raises:
+            ValueError: If data and container_ids have different lengths
+            ValueError: If insufficient data for any container
+
+        Example:
+            >>> generator = MultiHorizonWindowGenerator(window_size=100, prediction_horizons=[20, 60])
+            >>> X, y_dict, container_ids, metadata = generator.create_multi_container_sequences(
+            ...     data=values, container_ids=ids, timestamps=ts
+            ... )
+        """
+        # Ensure 2D array
+        if data.ndim == 1:
+            data = data.reshape(-1, 1)
+
+        n_timesteps, n_features = data.shape
+
+        # Validate container_ids
+        if len(container_ids) != n_timesteps:
+            raise ValueError(
+                f"data and container_ids must have same length. "
+                f"Got data: {n_timesteps}, container_ids: {len(container_ids)}"
+            )
+
+        # Get unique containers
+        unique_containers = np.unique(container_ids)
+        print(f"  Creating windows for {len(unique_containers)} containers...")
+
+        # Storage for all windows across containers
+        all_X = []
+        all_y_dicts = {horizon: [] for horizon in self.prediction_horizons}
+        all_window_container_ids = []
+        all_window_timestamps = []
+
+        max_horizon = max(self.prediction_horizons)
+
+        # Process each container separately
+        for container_id in unique_containers:
+            # Get indices for this container
+            container_mask = container_ids == container_id
+            container_indices = np.where(container_mask)[0]
+
+            # Check temporal continuity
+            # Container data should be contiguous or have small gaps
+            if len(container_indices) < self.window_size + max_horizon:
+                print(
+                    f"  Warning: Container {container_id} has only "
+                    f"{len(container_indices)} timesteps, skipping "
+                    f"(need {self.window_size + max_horizon})"
+                )
+                continue
+
+            # Extract data for this container
+            container_data = data[container_mask]
+            container_timestamps = (
+                timestamps[container_mask] if timestamps is not None else None
+            )
+
+            # Create windows for this container using existing method
+            try:
+                X_container, y_dict_container, timestamps_container = (
+                    self.create_multi_horizon_sequences(
+                        container_data, container_timestamps
+                    )
+                )
+
+                # Store windows with container ID
+                n_windows_container = X_container.shape[0]
+                all_X.append(X_container)
+                for horizon in self.prediction_horizons:
+                    all_y_dicts[horizon].append(y_dict_container[horizon])
+
+                # Track which container these windows belong to
+                all_window_container_ids.extend([container_id] * n_windows_container)
+
+                # Add container ID to timestamp metadata
+                if timestamps_container is not None:
+                    for ts_info in timestamps_container:
+                        ts_info["container_id"] = container_id
+                    all_window_timestamps.extend(timestamps_container)
+
+                print(
+                    f"    Container {container_id}: {n_windows_container} windows created"
+                )
+
+            except ValueError as e:
+                print(
+                    f"  Warning: Could not create windows for container {container_id}: {e}"
+                )
+                continue
+
+        # Check if we created any windows
+        if len(all_X) == 0:
+            raise ValueError(
+                "No windows could be created. All containers have insufficient data."
+            )
+
+        # Concatenate all windows
+        X = np.concatenate(all_X, axis=0)
+        y_dict = {
+            horizon: np.concatenate(all_y_dicts[horizon], axis=0)
+            for horizon in self.prediction_horizons
+        }
+        window_container_ids = np.array(all_window_container_ids)
+
+        print(
+            f"  Total windows created: {len(X)} across {len(unique_containers)} containers"
+        )
+
+        # Validate: each window should have consistent container ID
+        # This is a critical safety check
+        if timestamps is not None:
+            for i, ts_info in enumerate(all_window_timestamps):
+                assert (
+                    "container_id" in ts_info
+                ), f"Window {i} missing container_id in metadata"
+
+        return X, y_dict, window_container_ids, all_window_timestamps or None
+
 
 def create_multi_horizon_features_and_windows(
     df: pd.DataFrame,

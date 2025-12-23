@@ -14,12 +14,14 @@ class TimeSeriesDataset(Dataset):
     Dataset for multi-horizon time series prediction.
 
     Handles input sequences (X) and multiple target horizons (y_dict).
+    Supports container IDs for multi-container training with embeddings.
     """
 
     def __init__(
         self,
         X: np.ndarray,
         y_dict: Dict[int, np.ndarray],
+        container_ids: Optional[np.ndarray] = None,
         metadata: Optional[np.ndarray] = None,
     ):
         """
@@ -29,10 +31,15 @@ class TimeSeriesDataset(Dataset):
             X: Input sequences of shape (n_samples, window_size, n_features)
             y_dict: Dictionary mapping horizon to target arrays
                    {20: (n_samples, 20), 60: (n_samples, 60), 120: (n_samples, 120)}
+            container_ids: Optional container IDs for each sample (n_samples,)
+                          Used for multi-container training with embeddings
             metadata: Optional metadata for each sample
         """
         self.X = torch.FloatTensor(X)
         self.y_dict = {h: torch.FloatTensor(y) for h, y in y_dict.items()}
+        self.container_ids = (
+            torch.LongTensor(container_ids) if container_ids is not None else None
+        )
         self.metadata = metadata
         self.horizons = sorted(y_dict.keys())
 
@@ -40,6 +47,11 @@ class TimeSeriesDataset(Dataset):
         n_samples = len(X)
         for horizon, y in self.y_dict.items():
             assert len(y) == n_samples, f"Mismatch in samples for horizon {horizon}"
+
+        if self.container_ids is not None:
+            assert (
+                len(self.container_ids) == n_samples
+            ), "container_ids must match number of samples"
 
     def __len__(self):
         return len(self.X)
@@ -49,10 +61,14 @@ class TimeSeriesDataset(Dataset):
         Get a single sample.
 
         Returns:
-            Tuple of (X, y_dict) where y_dict has targets for all horizons
+            For single-container mode: (X, y_dict)
+            For multi-container mode: (X, y_dict, container_id)
         """
         x = self.X[idx]
         y = {h: self.y_dict[h][idx] for h in self.horizons}
+
+        if self.container_ids is not None:
+            return x, y, self.container_ids[idx]
 
         return x, y
 
@@ -85,6 +101,8 @@ def create_data_loaders(
     y_train_dict: Dict[int, np.ndarray],
     X_val: np.ndarray,
     y_val_dict: Dict[int, np.ndarray],
+    container_ids_train: Optional[np.ndarray] = None,
+    container_ids_val: Optional[np.ndarray] = None,
     batch_size: int = 32,
     num_workers: int = 4,
     shuffle_train: bool = True,
@@ -97,6 +115,8 @@ def create_data_loaders(
         y_train_dict: Training targets per horizon
         X_val: Validation input sequences
         y_val_dict: Validation targets per horizon
+        container_ids_train: Optional container IDs for training (for multi-container)
+        container_ids_val: Optional container IDs for validation (for multi-container)
         batch_size: Batch size for training
         num_workers: Number of worker processes
         shuffle_train: Whether to shuffle training data
@@ -104,8 +124,8 @@ def create_data_loaders(
     Returns:
         Tuple of (train_loader, val_loader)
     """
-    train_dataset = TimeSeriesDataset(X_train, y_train_dict)
-    val_dataset = TimeSeriesDataset(X_val, y_val_dict)
+    train_dataset = TimeSeriesDataset(X_train, y_train_dict, container_ids_train)
+    val_dataset = TimeSeriesDataset(X_val, y_val_dict, container_ids_val)
 
     train_loader = DataLoader(
         train_dataset,

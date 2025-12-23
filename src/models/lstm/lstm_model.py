@@ -35,9 +35,22 @@ class LSTMPredictor(BaseTimeSeriesModel):
         self.bidirectional = config.bidirectional
         self.prediction_horizons = getattr(config, "prediction_horizons", [20, 60, 120])
 
+        # Container embedding parameters (for multi-container training)
+        self.use_container_embeddings = getattr(config, "use_container_embeddings", False)
+        if self.use_container_embeddings:
+            self.num_containers = config.num_containers
+            self.container_embedding_dim = getattr(config, "container_embedding_dim", 8)
+            self.container_embedding = nn.Embedding(
+                self.num_containers, self.container_embedding_dim
+            )
+            # LSTM input size includes container embeddings
+            lstm_input_size = self.input_size + self.container_embedding_dim
+        else:
+            lstm_input_size = self.input_size
+
         # LSTM layers
         self.lstm = nn.LSTM(
-            input_size=self.input_size,
+            input_size=lstm_input_size,
             hidden_size=self.hidden_size,
             num_layers=self.num_layers,
             dropout=self.dropout if self.num_layers > 1 else 0,
@@ -65,16 +78,31 @@ class LSTMPredictor(BaseTimeSeriesModel):
             }
         )
 
-    def forward(self, x):
+    def forward(self, x, container_ids=None):
         """
         Forward pass through LSTM.
 
         Args:
             x: Input tensor of shape (batch_size, sequence_length, input_size)
+            container_ids: Optional container IDs (batch_size,) for multi-container mode
 
         Returns:
             LSTM features from last timestep (batch_size, hidden_size * directions)
         """
+        # Handle container embeddings if enabled
+        if self.use_container_embeddings and container_ids is not None:
+            # Get container embeddings: (batch_size, embed_dim)
+            container_emb = self.container_embedding(container_ids)
+
+            # Expand to sequence length: (batch_size, seq_len, embed_dim)
+            batch_size, seq_len, _ = x.shape
+            container_emb_expanded = container_emb.unsqueeze(1).expand(
+                batch_size, seq_len, self.container_embedding_dim
+            )
+
+            # Concatenate embeddings with input features: (batch_size, seq_len, features + embed_dim)
+            x = torch.cat([x, container_emb_expanded], dim=-1)
+
         # LSTM forward pass
         lstm_out, (hidden, cell) = self.lstm(x)
 
@@ -87,13 +115,14 @@ class LSTMPredictor(BaseTimeSeriesModel):
 
         return features
 
-    def predict(self, x, horizon: int):
+    def predict(self, x, horizon: int, container_ids=None):
         """
         Predict for a specific time horizon.
 
         Args:
             x: Input tensor of shape (batch_size, sequence_length, input_size)
             horizon: Number of timesteps to predict (must be in prediction_horizons)
+            container_ids: Optional container IDs (batch_size,) for multi-container mode
 
         Returns:
             Predictions of shape (batch_size, horizon)
@@ -104,27 +133,28 @@ class LSTMPredictor(BaseTimeSeriesModel):
                 f"{self.prediction_horizons}"
             )
 
-        # Get LSTM features
-        features = self.forward(x)
+        # Get LSTM features (with container embeddings if applicable)
+        features = self.forward(x, container_ids)
 
         # Apply horizon-specific prediction head
         predictions = self.prediction_heads[f"horizon_{horizon}"](features)
 
         return predictions
 
-    def predict_all_horizons(self, x):
+    def predict_all_horizons(self, x, container_ids=None):
         """
         Predict for all configured horizons.
 
         Args:
             x: Input tensor of shape (batch_size, sequence_length, input_size)
+            container_ids: Optional container IDs (batch_size,) for multi-container mode
 
         Returns:
             Dictionary mapping horizon to predictions
             {20: (batch, 20), 60: (batch, 60), 120: (batch, 120)}
         """
-        # Get LSTM features once
-        features = self.forward(x)
+        # Get LSTM features once (with container embeddings if applicable)
+        features = self.forward(x, container_ids)
 
         # Apply each prediction head
         predictions = {}

@@ -109,6 +109,9 @@ class MetricTrainer:
         y_val_dict: Dict[int, np.ndarray],
         X_test: Optional[np.ndarray] = None,
         y_test_dict: Optional[Dict[int, np.ndarray]] = None,
+        container_ids_train: Optional[np.ndarray] = None,
+        container_ids_val: Optional[np.ndarray] = None,
+        container_ids_test: Optional[np.ndarray] = None,
     ):
         """
         Prepare and normalize data for training.
@@ -116,10 +119,18 @@ class MetricTrainer:
         Args:
             X_train, X_val, X_test: Input sequences
             y_train_dict, y_val_dict, y_test_dict: Target dict per horizon
+            container_ids_train, container_ids_val, container_ids_test: Container IDs (for multi-container)
         """
         print(f"\nPreparing data for {self.metric_name}...")
         print(f"  X_train shape: {X_train.shape}")
         print(f"  Horizons: {sorted(y_train_dict.keys())}")
+        if container_ids_train is not None:
+            print(f"  Multi-container mode: {len(np.unique(container_ids_train))} containers")
+
+        # Store container IDs for later use
+        self.container_ids_train = container_ids_train
+        self.container_ids_val = container_ids_val
+        self.container_ids_test = container_ids_test
 
         # Normalize inputs
         self.X_scaler = TimeSeriesNormalizer(method=self.config.data.normalization)
@@ -230,13 +241,21 @@ class MetricTrainer:
         total_loss = 0.0
         n_batches = 0
 
-        for batch_X, batch_y_dict in train_loader:
+        for batch_data in train_loader:
+            # Handle both single and multi-container cases
+            if len(batch_data) == 3:  # Multi-container
+                batch_X, batch_y_dict, batch_container_ids = batch_data
+                batch_container_ids = batch_container_ids.to(self.device)
+            else:  # Single-container (backward compat)
+                batch_X, batch_y_dict = batch_data
+                batch_container_ids = None
+
             batch_X = batch_X.to(self.device)
             batch_y_dict = {h: y.to(self.device) for h, y in batch_y_dict.items()}
 
             # Forward pass
             self.optimizer.zero_grad()
-            predictions = self.model.predict_all_horizons(batch_X)
+            predictions = self.model.predict_all_horizons(batch_X, batch_container_ids)
 
             # Calculate loss
             loss = self.loss_fn(predictions, batch_y_dict)
@@ -265,12 +284,20 @@ class MetricTrainer:
         n_batches = 0
 
         with torch.no_grad():
-            for batch_X, batch_y_dict in val_loader:
+            for batch_data in val_loader:
+                # Handle both single and multi-container cases
+                if len(batch_data) == 3:  # Multi-container
+                    batch_X, batch_y_dict, batch_container_ids = batch_data
+                    batch_container_ids = batch_container_ids.to(self.device)
+                else:  # Single-container (backward compat)
+                    batch_X, batch_y_dict = batch_data
+                    batch_container_ids = None
+
                 batch_X = batch_X.to(self.device)
                 batch_y_dict = {h: y.to(self.device) for h, y in batch_y_dict.items()}
 
                 # Forward pass
-                predictions = self.model.predict_all_horizons(batch_X)
+                predictions = self.model.predict_all_horizons(batch_X, batch_container_ids)
 
                 # Calculate loss
                 loss = self.loss_fn(predictions, batch_y_dict)
@@ -286,12 +313,14 @@ class MetricTrainer:
         print(f"Training LSTM for {self.metric_name}")
         print(f"{'=' * 60}")
 
-        # Create data loaders
+        # Create data loaders (with container IDs if available)
         train_loader, val_loader = create_data_loaders(
             self.X_train,
             self.y_train_dict,
             self.X_val,
             self.y_val_dict,
+            container_ids_train=getattr(self, 'container_ids_train', None),
+            container_ids_val=getattr(self, 'container_ids_val', None),
             batch_size=self.config.training.batch_size,
             num_workers=self.config.training.num_workers,
         )

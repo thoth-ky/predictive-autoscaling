@@ -13,3 +13,7 @@ mlruns
 experiments
 logs/
 src/predictive_autoscaling.egg-info
+mlflow-full-training-test.db
+.claude/settings.local.json
+.coverage
+notebooks/correlation_matrix.csv

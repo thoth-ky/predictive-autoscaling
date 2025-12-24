@@ -115,9 +115,7 @@ def build_container_vocabulary(df: pd.DataFrame) -> ContainerVocabulary:
     return vocab
 
 
-def add_container_ids(
-    df: pd.DataFrame, vocab: ContainerVocabulary
-) -> pd.DataFrame:
+def add_container_ids(df: pd.DataFrame, vocab: ContainerVocabulary) -> pd.DataFrame:
     """
     Add numeric container_id column using vocabulary.
 
@@ -324,9 +322,9 @@ class MetricPreprocessor:
 
                 # Resample this container's data
                 container_df = container_df.set_index("timestamp").sort_index()
-                resampled_values = container_df["value"].resample(
-                    self.resample_freq
-                ).mean()
+                resampled_values = (
+                    container_df["value"].resample(self.resample_freq).mean()
+                )
 
                 # Forward fill missing values (up to 3 intervals)
                 resampled_values = resampled_values.ffill(limit=3)

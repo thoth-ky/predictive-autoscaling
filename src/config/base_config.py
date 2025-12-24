@@ -17,11 +17,11 @@ class DataConfig:
     processed_data_path: str = "/home/thoth/dpn/predictive-autoscaling/data/processed"
 
     # Window configuration
-    window_size: int = 240  # 60 minutes at 15s intervals
+    window_size: int = 120  # 30 minutes at 15s intervals
+    stride: int = 2  # 1 minute between windows
     prediction_horizons: List[int] = field(
         default_factory=lambda: [20, 60, 120]
     )  # 5, 15, 30 min
-    stride: int = 4  # 1 minute between windows
 
     # Train/val/test split ratios
     train_split: float = 0.7
@@ -114,7 +114,9 @@ class TrainingConfig:
 
     # Experiment tracking
     experiment_name: str = "predictive-autoscaling"
-    tracking_uri: str = "sqlite:////home/thoth/dpn/predictive-autoscaling/experiments/mlflow.db"
+    tracking_uri: str = (
+        "sqlite:////home/thoth/dpn/predictive-autoscaling/experiments/mlflow.db"
+    )
     log_interval: int = 10  # Log every N batches
 
     # SageMaker specific
@@ -136,7 +138,6 @@ class ExperimentConfig:
     def to_dict(self) -> Dict:
         """Convert config to dictionary."""
         model_dict = self.model.__dict__.copy()
-        # Convert tuples to lists for YAML compatibility
         model_dict["arima_order"] = list(self.model.arima_order)
         model_dict["arima_seasonal_order"] = list(self.model.arima_seasonal_order)
 

@@ -38,9 +38,7 @@ class MLflowModelLogger:
         self.model_type = model_type
 
     def create_model_signature(
-        self,
-        input_example: np.ndarray,
-        output_example: Dict[int, np.ndarray]
+        self, input_example: np.ndarray, output_example: Dict[int, np.ndarray]
     ):
         """
         Create MLflow model signature from examples.
@@ -203,7 +201,11 @@ class MLflowModelLogger:
             input_example=input_example,
             registered_model_name=registered_model_name,
             pip_requirements=[
-                "statsmodels>=0.14.0" if self.model_type == "arima" else "prophet>=1.1.0",
+                (
+                    "statsmodels>=0.14.0"
+                    if self.model_type == "arima"
+                    else "prophet>=1.1.0"
+                ),
                 "numpy>=1.24.0",
                 "pandas>=2.0.0",
             ],
@@ -225,6 +227,7 @@ class MLflowModelLogger:
         Returns:
             Instance of a class that inherits from mlflow.pyfunc.PythonModel
         """
+
         # Dynamically create a class that inherits from PythonModel
         class StatisticalModelWrapper(self.mlflow.pyfunc.PythonModel):
             """MLflow pyfunc wrapper for statistical models."""
@@ -323,7 +326,9 @@ class MLflowModelLogger:
         )
 
 
-def create_model_name(metric_name: str, model_type: str, container_name: str = "webapp") -> str:
+def create_model_name(
+    metric_name: str, model_type: str, container_name: str = "webapp"
+) -> str:
     """
     Create standardized model name for MLflow Registry.
 
@@ -338,7 +343,9 @@ def create_model_name(metric_name: str, model_type: str, container_name: str = "
     return f"{container_name}_{metric_name}_{model_type}"
 
 
-def get_model_tags(config: Any, best_val_loss: Optional[float] = None) -> Dict[str, str]:
+def get_model_tags(
+    config: Any, best_val_loss: Optional[float] = None
+) -> Dict[str, str]:
     """
     Generate standard tags for model version.
 

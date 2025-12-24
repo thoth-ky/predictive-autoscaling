@@ -44,7 +44,7 @@ class MetricTrainer:
         self,
         config: ExperimentConfig,
         use_mlflow: bool = True,
-        register_model: bool = True
+        register_model: bool = True,
     ):
         """
         Initialize trainer.
@@ -125,7 +125,9 @@ class MetricTrainer:
         print(f"  X_train shape: {X_train.shape}")
         print(f"  Horizons: {sorted(y_train_dict.keys())}")
         if container_ids_train is not None:
-            print(f"  Multi-container mode: {len(np.unique(container_ids_train))} containers")
+            print(
+                f"  Multi-container mode: {len(np.unique(container_ids_train))} containers"
+            )
 
         # Store container IDs for later use
         self.container_ids_train = container_ids_train
@@ -236,7 +238,7 @@ class MetricTrainer:
         """
         if self.model_type != "lstm" or self.model is None:
             raise ValueError("train_epoch is only supported for LSTM models")
-        
+
         self.model.train()
         total_loss = 0.0
         n_batches = 0
@@ -297,7 +299,9 @@ class MetricTrainer:
                 batch_y_dict = {h: y.to(self.device) for h, y in batch_y_dict.items()}
 
                 # Forward pass
-                predictions = self.model.predict_all_horizons(batch_X, batch_container_ids)
+                predictions = self.model.predict_all_horizons(
+                    batch_X, batch_container_ids
+                )
 
                 # Calculate loss
                 loss = self.loss_fn(predictions, batch_y_dict)
@@ -319,8 +323,8 @@ class MetricTrainer:
             self.y_train_dict,
             self.X_val,
             self.y_val_dict,
-            container_ids_train=getattr(self, 'container_ids_train', None),
-            container_ids_val=getattr(self, 'container_ids_val', None),
+            container_ids_train=getattr(self, "container_ids_train", None),
+            container_ids_val=getattr(self, "container_ids_val", None),
             batch_size=self.config.training.batch_size,
             num_workers=self.config.training.num_workers,
         )
@@ -404,17 +408,32 @@ class MetricTrainer:
 
             # Create input/output examples from validation data
             input_example = self.X_val[0:1]  # First validation sample
+            container_id_example = None
+            if self.container_ids_val is not None:
+                container_id_example = self.container_ids_val[0:1]
+
             with torch.no_grad():
                 self.model.eval()
                 X_example = torch.FloatTensor(input_example).to(self.device)
-                output_example = self.model.predict_all_horizons(X_example)
-                output_example = {h: pred.cpu().numpy() for h, pred in output_example.items()}
+
+                # Pass container IDs if available (for multi-container models)
+                if container_id_example is not None:
+                    container_id_tensor = torch.LongTensor(container_id_example).to(
+                        self.device
+                    )
+                    output_example = self.model.predict_all_horizons(
+                        X_example, container_id_tensor
+                    )
+                else:
+                    output_example = self.model.predict_all_horizons(X_example)
+
+                output_example = {
+                    h: pred.cpu().numpy() for h, pred in output_example.items()
+                }
 
             # Log the model
             checkpoint_path = os.path.join(
-                self.config.training.checkpoint_dir,
-                self.metric_name,
-                "best_model.pth"
+                self.config.training.checkpoint_dir, self.metric_name, "best_model.pth"
             )
 
             registered_model_name = None
@@ -445,7 +464,9 @@ class MetricTrainer:
 
                 # Get latest version
                 client = self.mlflow.tracking.MlflowClient()
-                versions = client.search_model_versions(f"name='{registered_model_name}'")
+                versions = client.search_model_versions(
+                    f"name='{registered_model_name}'"
+                )
                 if versions:
                     latest_version = max(versions, key=lambda v: int(v.version))
 
@@ -489,12 +510,22 @@ class MetricTrainer:
             # Add model-specific params
             if self.model_type == "arima":
                 params["arima_order"] = str(self.config.model.arima_order)
-                params["arima_seasonal_order"] = str(self.config.model.arima_seasonal_order)
+                params["arima_seasonal_order"] = str(
+                    self.config.model.arima_seasonal_order
+                )
             elif self.model_type == "prophet":
-                params["changepoint_prior_scale"] = self.config.model.prophet_changepoint_prior_scale
-                params["yearly_seasonality"] = self.config.model.prophet_yearly_seasonality
-                params["weekly_seasonality"] = self.config.model.prophet_weekly_seasonality
-                params["daily_seasonality"] = self.config.model.prophet_daily_seasonality
+                params["changepoint_prior_scale"] = (
+                    self.config.model.prophet_changepoint_prior_scale
+                )
+                params["yearly_seasonality"] = (
+                    self.config.model.prophet_yearly_seasonality
+                )
+                params["weekly_seasonality"] = (
+                    self.config.model.prophet_weekly_seasonality
+                )
+                params["daily_seasonality"] = (
+                    self.config.model.prophet_daily_seasonality
+                )
 
             self.mlflow.log_params(params)
 
@@ -596,9 +627,7 @@ class MetricTrainer:
                 # Reshape to (1, horizon) for consistency, then denormalize
                 pred_reshaped = y_pred_dict_raw[horizon].reshape(1, -1)
                 y_pred_dict[horizon] = (
-                    self.y_scaler[horizon]
-                    .inverse_transform(pred_reshaped)
-                    .reshape(-1)
+                    self.y_scaler[horizon].inverse_transform(pred_reshaped).reshape(-1)
                 )
 
             # For statistical models, evaluate only on first test window
@@ -683,7 +712,9 @@ class MetricTrainer:
 
                     # Get latest version
                     client = self.mlflow.tracking.MlflowClient()
-                    versions = client.search_model_versions(f"name='{registered_model_name}'")
+                    versions = client.search_model_versions(
+                        f"name='{registered_model_name}'"
+                    )
                     if versions:
                         latest_version = max(versions, key=lambda v: int(v.version))
 

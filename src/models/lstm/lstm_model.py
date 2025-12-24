@@ -36,7 +36,9 @@ class LSTMPredictor(BaseTimeSeriesModel):
         self.prediction_horizons = getattr(config, "prediction_horizons", [20, 60, 120])
 
         # Container embedding parameters (for multi-container training)
-        self.use_container_embeddings = getattr(config, "use_container_embeddings", False)
+        self.use_container_embeddings = getattr(
+            config, "use_container_embeddings", False
+        )
         if self.use_container_embeddings:
             self.num_containers = config.num_containers
             self.container_embedding_dim = getattr(config, "container_embedding_dim", 8)

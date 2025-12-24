@@ -65,16 +65,16 @@ def discover_containers(df: pd.DataFrame) -> list:
         Sorted list of unique container names
     """
     df_temp = df.copy()
-    df_temp['container_name'] = df_temp['container_labels'].apply(extract_container_name)
-    containers = sorted(df_temp['container_name'].unique().tolist())
+    df_temp["container_name"] = df_temp["container_labels"].apply(
+        extract_container_name
+    )
+    containers = sorted(df_temp["container_name"].unique().tolist())
     print(f"📦 Discovered {len(containers)} containers: {', '.join(containers)}")
     return containers
 
 
 def parse_container_selection(
-    container_arg: str,
-    containers_list: Optional[list],
-    df: pd.DataFrame
+    container_arg: str, containers_list: Optional[list], df: pd.DataFrame
 ) -> list:
     """
     Parse container argument and return list of containers to train on.
@@ -151,14 +151,16 @@ def prepare_training_data(
     vocab = None
     container_ids_array = None
     if is_multi_container:
-        print(f"\nBuilding container vocabulary for {len(container_names)} containers...")
+        print(
+            f"\nBuilding container vocabulary for {len(container_names)} containers..."
+        )
         vocab = build_container_vocabulary(processed)
         print(f"  Vocabulary size: {vocab.num_containers}")
         print(f"  Containers: {', '.join(vocab.get_all_names())}")
 
         # Add container IDs
         processed = add_container_ids(processed, vocab)
-        container_ids_array = processed['container_id'].values
+        container_ids_array = processed["container_id"].values
 
     # Create features and windows
     print("\nCreating features and windows...")
@@ -172,7 +174,7 @@ def prepare_training_data(
         from src.preprocessing.sliding_windows import (
             add_temporal_features,
             add_lag_features,
-            add_rolling_features
+            add_rolling_features,
         )
 
         print("  Adding temporal, lag, and rolling features...")
@@ -186,8 +188,16 @@ def prepare_training_data(
         # Get feature columns (exclude timestamp, original value, and metadata)
         # Also exclude 'metric_name' as it's a string column
         feature_columns = [
-            col for col in processed.columns
-            if col not in ["timestamp", "value", "container_name", "container_id", "metric_name"]
+            col
+            for col in processed.columns
+            if col
+            not in [
+                "timestamp",
+                "value",
+                "container_name",
+                "container_id",
+                "metric_name",
+            ]
         ]
 
         if not feature_columns:
@@ -200,26 +210,32 @@ def prepare_training_data(
         data_values = processed[feature_columns].values
 
         # Create container ID to name mapping for better error messages
-        container_id_to_name = processed.groupby('container_id')['container_name'].first().to_dict()
+        container_id_to_name = (
+            processed.groupby("container_id")["container_name"].first().to_dict()
+        )
 
         # Use multi-container windowing
         generator = MultiHorizonWindowGenerator(
             window_size=window_size_timesteps,
             prediction_horizons=prediction_horizons_timesteps,
-            stride=4  # 1 minute between windows
+            stride=4,  # 1 minute between windows
         )
 
-        X, y_dict, window_container_ids, metadata = generator.create_multi_container_sequences(
-            data_values,
-            processed['container_id'].values,
-            processed['timestamp'],
-            container_id_to_name=container_id_to_name
+        X, y_dict, window_container_ids, metadata = (
+            generator.create_multi_container_sequences(
+                data_values,
+                processed["container_id"].values,
+                processed["timestamp"],
+                container_id_to_name=container_id_to_name,
+            )
         )
 
         print(f"  Created {len(X)} windows across {len(container_names)} containers")
         print(f"  Window shape: {X.shape}")
         for horizon in prediction_horizons_timesteps:
-            print(f"    Horizon {horizon//4}min ({horizon} steps): {y_dict[horizon].shape}")
+            print(
+                f"    Horizon {horizon//4}min ({horizon} steps): {y_dict[horizon].shape}"
+            )
 
         # Store feature names for consistency with single-container path
         feature_names = feature_columns
@@ -250,12 +266,14 @@ def prepare_training_data(
         n_val = len(X_val)
 
         container_ids_train = window_container_ids[:n_train]
-        container_ids_val = window_container_ids[n_train:n_train + n_val]
-        container_ids_test = window_container_ids[n_train + n_val:]
+        container_ids_val = window_container_ids[n_train : n_train + n_val]
+        container_ids_test = window_container_ids[n_train + n_val :]
 
     else:
-        X_train, X_val, X_test, y_train_dict, y_val_dict, y_test_dict = split_temporal_data(
-            X, y_dict, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15
+        X_train, X_val, X_test, y_train_dict, y_val_dict, y_test_dict = (
+            split_temporal_data(
+                X, y_dict, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15
+            )
         )
         container_ids_train = None
         container_ids_val = None
@@ -269,14 +287,28 @@ def prepare_training_data(
     if is_multi_container:
         print("\n  Container distribution in training set:")
         from collections import Counter
+
         train_counts = Counter(container_ids_train)
         for cid, count in sorted(train_counts.items()):
             container_name = vocab.get_name(cid)
-            print(f"    {container_name}: {count} samples ({100*count/len(X_train):.1f}%)")
+            print(
+                f"    {container_name}: {count} samples ({100*count/len(X_train):.1f}%)"
+            )
 
-    return (X_train, y_train_dict, X_val, y_val_dict, X_test, y_test_dict,
-            container_ids_train, container_ids_val, container_ids_test,
-            vocab, None, metadata)
+    return (
+        X_train,
+        y_train_dict,
+        X_val,
+        y_val_dict,
+        X_test,
+        y_test_dict,
+        container_ids_train,
+        container_ids_val,
+        container_ids_test,
+        vocab,
+        None,
+        metadata,
+    )
 
 
 def main():  # noqa: C901
@@ -391,7 +423,9 @@ Examples:
     if not args.data_file:
         print("\nError: --data-file argument is required")
         print("Please specify a metrics CSV file:")
-        print("  python scripts/train_local.py --metric cpu --data-file data/raw/metrics/container_cpu_rate_*.csv")
+        print(
+            "  python scripts/train_local.py --metric cpu --data-file data/raw/metrics/container_cpu_rate_*.csv"
+        )
         sys.exit(1)
 
     print(f"\nLoading data to discover containers: {args.data_file}")
@@ -399,12 +433,12 @@ Examples:
 
     # Parse container selection
     selected_containers = parse_container_selection(
-        args.container,
-        args.containers,
-        df_raw
+        args.container, args.containers, df_raw
     )
 
-    print(f"\n🎯 Training on {len(selected_containers)} container(s): {', '.join(selected_containers)}")
+    print(
+        f"\n🎯 Training on {len(selected_containers)} container(s): {', '.join(selected_containers)}"
+    )
 
     # Load or create configuration
     if args.config:
@@ -440,9 +474,20 @@ Examples:
 
     # Prepare data with container selection
     try:
-        (X_train, y_train_dict, X_val, y_val_dict, X_test, y_test_dict,
-         container_ids_train, container_ids_val, container_ids_test,
-         vocab, scalers, metadata) = prepare_training_data(
+        (
+            X_train,
+            y_train_dict,
+            X_val,
+            y_val_dict,
+            X_test,
+            y_test_dict,
+            container_ids_train,
+            container_ids_val,
+            container_ids_test,
+            vocab,
+            scalers,
+            metadata,
+        ) = prepare_training_data(
             metric_name=args.metric,
             container_names=selected_containers,
             data_file=args.data_file,
@@ -462,9 +507,7 @@ Examples:
 
     # Create trainer
     trainer = MetricTrainer(
-        config,
-        use_mlflow=not args.no_mlflow,
-        register_model=register_model
+        config, use_mlflow=not args.no_mlflow, register_model=register_model
     )
 
     # Store vocabulary for saving with model
@@ -473,10 +516,15 @@ Examples:
 
     # Prepare normalized data with container IDs
     trainer.prepare_data(
-        X_train, y_train_dict, X_val, y_val_dict, X_test, y_test_dict,
+        X_train,
+        y_train_dict,
+        X_val,
+        y_val_dict,
+        X_test,
+        y_test_dict,
         container_ids_train=container_ids_train,
         container_ids_val=container_ids_val,
-        container_ids_test=container_ids_test
+        container_ids_test=container_ids_test,
     )
 
     # Train model

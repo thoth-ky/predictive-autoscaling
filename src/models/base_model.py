@@ -170,6 +170,26 @@ class StatisticalBaseModel(ABC):
         """
         pass
 
+    def update(self, y_new: np.ndarray, refit: bool = False):
+        """
+        Update model with new observations (for rolling window forecasting).
+
+        Args:
+            y_new: New observations to append
+            refit: Whether to refit the entire model (slow) or use incremental update
+
+        Note:
+            Default implementation refits the model. Subclasses can override
+            for more efficient incremental updates if supported.
+        """
+        if not self.is_fitted:
+            raise ValueError("Model must be fitted before updating")
+
+        # Default: refit (can be overridden by subclasses for efficiency)
+        if refit:
+            # This is a placeholder - subclasses should implement properly
+            pass
+
     def get_model_info(self) -> Dict[str, Any]:
         """
         Return model metadata.

@@ -17,3 +17,4 @@ mlflow-full-training-test.db
 .claude/settings.local.json
 .coverage
 notebooks/correlation_matrix.csv
+mlflow-test.db

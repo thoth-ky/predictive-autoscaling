@@ -625,35 +625,62 @@ class MetricTrainer:
                 )
 
         else:
-            # Statistical model evaluation
-            # ARIMA/Prophet make one continuous forecast, so we compare against
-            # the first test sample's targets (treating it as continuation)
+            # Statistical model evaluation with rolling window forecasting
+            # Make predictions for each test window to fairly compare with LSTM
             horizons = sorted(self.config.data.prediction_horizons)
-            y_pred_dict_raw = self.model.predict_multi_horizon(horizons)
+            n_test_samples = len(X_test)
 
-            # Denormalize predictions for statistical models
-            y_pred_dict = {}
-            for horizon in horizons:
-                # Reshape to (1, horizon) for consistency, then denormalize
-                pred_reshaped = y_pred_dict_raw[horizon].reshape(1, -1)
-                y_pred_dict[horizon] = (
-                    self.y_scaler[horizon].inverse_transform(pred_reshaped).reshape(-1)
+            print(f"  Running rolling window evaluation on {n_test_samples} test samples...")
+
+            # Initialize prediction storage
+            y_pred_dict = {h: [] for h in horizons}
+
+            # Get the original training data (before normalization) for context
+            # We'll use X_test windows to provide historical context for each prediction
+            for i in range(n_test_samples):
+                # For each test window, we need historical context
+                # Extract all features for proper inverse transformation
+                history_all_features = X_test[i, :, :]  # Shape: (window_size, n_features)
+
+                # Denormalize with all features, then extract the main metric (first column)
+                history_denorm_all = self.X_scaler.inverse_transform(
+                    history_all_features
+                )
+                # Extract only the main metric (first column) for the statistical model
+                history_denorm = history_denorm_all[:, 0]
+
+                # Refit model on this historical window
+                # (In practice, this could be optimized with incremental updates)
+                self.model.fit(history_denorm)
+
+                # Make multi-horizon predictions
+                pred_dict_raw = self.model.predict_multi_horizon(horizons)
+
+                # Store predictions for each horizon
+                for h in horizons:
+                    y_pred_dict[h].append(pred_dict_raw[h])
+
+            # Convert lists to arrays and denormalize
+            for h in horizons:
+                # Stack predictions: (n_samples, horizon)
+                y_pred_dict[h] = np.array(y_pred_dict[h])
+
+                # Denormalize predictions
+                y_pred_dict[h] = (
+                    self.y_scaler[h]
+                    .inverse_transform(y_pred_dict[h].reshape(-1, 1))
+                    .reshape(y_pred_dict[h].shape)
                 )
 
-            # For statistical models, evaluate only on first test window
-            # since they produce a continuous forecast, not per-window predictions
+            # Denormalize test targets to match
             y_test_dict_eval = {}
-            for horizon in horizons:
-                # Denormalize test data
-                test_denorm = (
-                    self.y_scaler[horizon]
-                    .inverse_transform(y_test_dict[horizon].reshape(-1, 1))
-                    .reshape(y_test_dict[horizon].shape)
+            for h in horizons:
+                y_test_dict_eval[h] = (
+                    self.y_scaler[h]
+                    .inverse_transform(y_test_dict[h].reshape(-1, 1))
+                    .reshape(y_test_dict[h].shape)
                 )
-                # Use only first test window for comparison
-                y_test_dict_eval[horizon] = test_denorm[0]
 
-            # Override for evaluation
             y_test_dict = y_test_dict_eval
 
         # Compute metrics

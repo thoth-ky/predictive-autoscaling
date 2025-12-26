@@ -473,6 +473,9 @@ Examples:
         config.training.epochs = args.epochs
 
     # Prepare data with container selection
+    # Convert horizons from timesteps to minutes (4 timesteps = 1 minute at 15s intervals)
+    prediction_horizons_minutes = [h // 4 for h in config.data.prediction_horizons]
+
     try:
         (
             X_train,
@@ -492,7 +495,7 @@ Examples:
             container_names=selected_containers,
             data_file=args.data_file,
             window_size_minutes=60,
-            prediction_horizons_minutes=[5, 15, 30],
+            prediction_horizons_minutes=prediction_horizons_minutes,
         )
     except Exception as e:
         print(f"\nError preparing data: {e}")

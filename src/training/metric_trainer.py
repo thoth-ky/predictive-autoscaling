@@ -598,7 +598,17 @@ class MetricTrainer:
             self.model.eval()
             with torch.no_grad():
                 X_test_tensor = torch.FloatTensor(X_test).to(self.device)
-                predictions = self.model.predict_all_horizons(X_test_tensor)
+
+                # Pass container_ids if model uses embeddings
+                if hasattr(self.model, 'use_container_embeddings') and self.model.use_container_embeddings:
+                    if self.container_ids_test is not None:
+                        container_ids_tensor = torch.LongTensor(self.container_ids_test).to(self.device)
+                        predictions = self.model.predict_all_horizons(X_test_tensor, container_ids_tensor)
+                    else:
+                        raise ValueError("Model requires container_ids but container_ids_test is None")
+                else:
+                    predictions = self.model.predict_all_horizons(X_test_tensor)
+
                 y_pred_dict = {h: pred.cpu().numpy() for h, pred in predictions.items()}
 
             # Denormalize predictions

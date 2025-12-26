@@ -33,6 +33,8 @@ def test_engineered_features_match_model_input_size(engineered_feature_dataframe
     # Build model with correct input size
     config = ExperimentConfig.from_yaml("src/config/model_configs/cpu_config.yaml")
     config.model.input_size = expected_features
+    # Disable container embeddings for this basic feature test
+    config.model.use_container_embeddings = False
 
     model = LSTMPredictor(config.model)
 
@@ -269,6 +271,8 @@ def test_feature_count_consistency_across_preprocessing():
     # Build model with final feature count
     config = ExperimentConfig.from_yaml("src/config/model_configs/cpu_config.yaml")
     config.model.input_size = final_feature_count
+    # Disable container embeddings for this basic feature test
+    config.model.use_container_embeddings = False
 
     model = LSTMPredictor(config.model)
 

@@ -295,4 +295,8 @@ def cleanup_mlflow():
     # After test: clean up any runs started during test
     active_run = mlflow.active_run()
     if active_run:
-        mlflow.end_run()
+        try:
+            mlflow.end_run()
+        except Exception:
+            # Ignore errors if the tracking directory was already cleaned up
+            pass

@@ -42,6 +42,9 @@ def test_mlflow_logging_with_container_embeddings(
         config.model.use_container_embeddings = True
         config.model.num_containers = 3
         config.model.container_embedding_dim = 8
+        # Match config horizons to test data horizons
+        config.data.prediction_horizons = [20, 60, 120]
+        config.training.horizon_weights = {20: 1.0, 60: 1.5, 120: 1.0}
 
         # Train model
         trainer = MetricTrainer(config, use_mlflow=True, register_model=False)
@@ -93,6 +96,9 @@ def test_mlflow_logging_without_container_embeddings(
         config.training.epochs = 2
         config.model.input_size = realistic_feature_count
         config.model.use_container_embeddings = False
+        # Match config horizons to test data horizons
+        config.data.prediction_horizons = [20, 60, 120]
+        config.training.horizon_weights = {20: 1.0, 60: 1.5, 120: 1.0}
 
         trainer = MetricTrainer(config, use_mlflow=True, register_model=False)
         trainer.prepare_data(X_train, y_train_dict, X_val, y_val_dict)
@@ -170,6 +176,9 @@ def test_mlflow_input_output_signature(
         config.model.input_size = realistic_feature_count
         config.model.use_container_embeddings = True
         config.model.num_containers = 3
+        # Match config horizons to test data horizons
+        config.data.prediction_horizons = [20, 60, 120]
+        config.training.horizon_weights = {20: 1.0, 60: 1.5, 120: 1.0}
 
         trainer = MetricTrainer(config, use_mlflow=True, register_model=False)
         trainer.prepare_data(
@@ -233,6 +242,9 @@ def test_mlflow_model_registry_disabled(
         config.model.input_size = realistic_feature_count
         config.model.use_container_embeddings = True
         config.model.num_containers = 3
+        # Match config horizons to test data horizons
+        config.data.prediction_horizons = [20, 60, 120]
+        config.training.horizon_weights = {20: 1.0, 60: 1.5, 120: 1.0}
 
         # Explicitly disable model registration
         trainer = MetricTrainer(config, use_mlflow=True, register_model=False)
@@ -300,6 +312,9 @@ def test_full_training_with_mlflow_logging(
         config.model.input_size = realistic_feature_count
         config.model.use_container_embeddings = True
         config.model.num_containers = 3
+        # Match config horizons to test data horizons
+        config.data.prediction_horizons = [20, 60, 120]
+        config.training.horizon_weights = {20: 1.0, 60: 1.5, 120: 1.0}
 
         trainer = MetricTrainer(config, use_mlflow=True, register_model=False)
         trainer.prepare_data(

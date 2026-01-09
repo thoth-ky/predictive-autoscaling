@@ -6,6 +6,7 @@ Abstract base class for all time series prediction models.
 from abc import ABC, abstractmethod
 import torch.nn as nn
 from typing import Dict, Any, Optional
+import numpy as np
 
 
 class BaseTimeSeriesModel(ABC, nn.Module):

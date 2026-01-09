@@ -33,11 +33,31 @@ from src.preprocessing.sliding_windows import (  # noqa: E402
     MultiHorizonWindowGenerator,
 )
 from src.preprocessing.data_splitter import split_temporal_data  # noqa: E402
+from src.preprocessing.data_statistics import (  # noqa: E402
+    DataStatistics,
+    generate_window_examples,
+)
+from src.preprocessing.feature_cache import FeatureCache  # noqa: E402
+from src.preprocessing.exploratory_analysis import ExploratoryAnalyzer  # noqa: E402
 from src.training.metric_trainer import MetricTrainer  # noqa: E402
 
 
 def find_latest_data_file(data_dir: str = "data/raw/metrics") -> str:
-    """Find the most recent metrics CSV file."""
+    """
+    Find the most recent metrics CSV file based on timestamp in filename.
+
+    The function looks for CSV files with timestamps in their names (format: YYYYMMDD_HHMMSS)
+    and returns the one with the most recent timestamp.
+
+    Args:
+        data_dir: Directory to search for metrics files
+
+    Returns:
+        Path to the most recent metrics file
+
+    Raises:
+        FileNotFoundError: If no metrics files are found
+    """
     data_pattern = os.path.join(data_dir, "*.csv")
     data_files = glob.glob(data_pattern)
 
@@ -48,9 +68,34 @@ def find_latest_data_file(data_dir: str = "data/raw/metrics") -> str:
             f"  python scripts/exporters/export_metrics_targeted.py"
         )
 
-    latest_file = max(
-        data_files
-    )  # TODO: get better identification of most relevant file if multiple raw metrics are available
+    # Try to extract timestamps from filenames to find the most recent
+    import re
+    from datetime import datetime
+
+    file_timestamps = []
+    for filepath in data_files:
+        filename = os.path.basename(filepath)
+        # Look for timestamp pattern like 20251224_001604
+        match = re.search(r'(\d{8})_(\d{6})', filename)
+        if match:
+            timestamp_str = match.group(1) + match.group(2)
+            try:
+                timestamp = datetime.strptime(timestamp_str, '%Y%m%d%H%M%S')
+                file_timestamps.append((filepath, timestamp))
+            except ValueError:
+                # If parsing fails, use file modification time as fallback
+                file_timestamps.append((filepath, datetime.fromtimestamp(os.path.getmtime(filepath))))
+        else:
+            # No timestamp in filename, use file modification time
+            file_timestamps.append((filepath, datetime.fromtimestamp(os.path.getmtime(filepath))))
+
+    # Sort by timestamp (most recent first) and return the first one
+    file_timestamps.sort(key=lambda x: x[1], reverse=True)
+    latest_file = file_timestamps[0][0]
+    
+    print(f"  Auto-selected most recent file: {os.path.basename(latest_file)}")
+    print(f"  Timestamp: {file_timestamps[0][1]}")
+    
     return latest_file
 
 
@@ -103,6 +148,10 @@ def prepare_training_data(
     data_file: Optional[str] = None,
     window_size_minutes: int = 60,
     prediction_horizons_minutes: Optional[list] = None,
+    use_cache: bool = True,
+    save_cache: bool = True,
+    collect_statistics: bool = True,
+    show_eda: bool = False,
 ):
     """
     Load and prepare data for training (supports multi-container).
@@ -113,27 +162,115 @@ def prepare_training_data(
         data_file: Path to CSV data file
         window_size_minutes: Lookback window in minutes
         prediction_horizons_minutes: List of prediction horizons in minutes
+        use_cache: Whether to use cached features if available
+        save_cache: Whether to save processed features to cache
+        collect_statistics: Whether to collect and display data statistics
+        show_eda: Whether to show exploratory data analysis
 
     Returns:
         Tuple of (X_train, y_train_dict, X_val, y_val_dict, X_test, y_test_dict,
                   container_ids_train, container_ids_val, container_ids_test,
-                  vocab, scalers, metadata)
+                  vocab, scalers, metadata, statistics, feature_names)
     """
     if prediction_horizons_minutes is None:
         prediction_horizons_minutes = [5, 15, 30]
 
+    # Initialize statistics collector
+    stats_collector = DataStatistics() if collect_statistics else None
+    eda_analyzer = ExploratoryAnalyzer() if show_eda else None
+
+    # Initialize cache
+    cache = FeatureCache() if (use_cache or save_cache) else None
+
+    # Check cache first
+    if use_cache and cache and data_file:
+        cache_exists, cache_key = cache.exists(
+            data_file,
+            metric_name,
+            container_names,
+            window_size_minutes,
+            prediction_horizons_minutes,
+        )
+
+        if cache_exists:
+            print(f"\n{'='*70}")
+            print("LOADING FROM CACHE")
+            print(f"{'='*70}")
+
+            (
+                X_train,
+                y_train_dict,
+                X_val,
+                y_val_dict,
+                X_test,
+                y_test_dict,
+                container_ids_train,
+                container_ids_val,
+                container_ids_test,
+                vocab,
+                feature_names,
+                metadata,
+            ) = cache.load(cache_key)
+
+            # Collect statistics on cached data if requested
+            if collect_statistics:
+                print("\nCollecting statistics from cached data...")
+                stats_collector.add_stats(
+                    "splits",
+                    stats_collector.compute_split_stats(
+                        X_train,
+                        X_val,
+                        X_test,
+                        y_train_dict,
+                        y_val_dict,
+                        y_test_dict,
+                        container_ids_train,
+                        container_ids_val,
+                        container_ids_test,
+                        vocab,
+                    ),
+                )
+
+            return (
+                X_train,
+                y_train_dict,
+                X_val,
+                y_val_dict,
+                X_test,
+                y_test_dict,
+                container_ids_train,
+                container_ids_val,
+                container_ids_test,
+                vocab,
+                None,
+                metadata,
+                stats_collector,
+                feature_names,
+            )
+
     # Load data
     if data_file is None:
-        # TODO: Automatic latest file detection is not currently supported
-        raise NotImplementedError(
-            "Automatic data file selection is not currently supported. "
-            "Please specify a data file using the --data-file argument."
-        )
-        # data_file = find_latest_data_file()
+        # Automatic file detection
+        data_file = find_latest_data_file()
 
+    print(f"\n{'='*70}")
+    print("LOADING AND PROCESSING DATA")
+    print(f"{'='*70}")
     print(f"\nLoading data from: {data_file}")
     df = pd.read_csv(data_file)
     print(f"  Total records: {len(df):,}")
+
+    # Collect raw data statistics
+    if collect_statistics:
+        print("\nCollecting raw data statistics...")
+        raw_stats = stats_collector.compute_raw_data_stats(df, metric_name)
+        stats_collector.add_stats("raw_data", raw_stats)
+
+    # Perform EDA on raw data
+    if show_eda and eda_analyzer:
+        print("\nPerforming exploratory data analysis on raw data...")
+        # Store raw df for EDA report generation later
+        raw_df_for_eda = df.copy()
 
     # Determine if multi-container mode
     is_multi_container = len(container_names) > 1
@@ -146,6 +283,14 @@ def prepare_training_data(
     print(
         f"  Time range: {processed['timestamp'].min()} to {processed['timestamp'].max()}"
     )
+
+    # Collect processed data statistics
+    if collect_statistics:
+        print("\nCollecting processed data statistics...")
+        processed_stats = stats_collector.compute_processed_data_stats(
+            processed, container_names, is_multi_container
+        )
+        stats_collector.add_stats("processed_data", processed_stats)
 
     # Build container vocabulary for multi-container mode
     vocab = None
@@ -284,7 +429,55 @@ def prepare_training_data(
     print(f"  Validation samples: {len(X_val):,}")
     print(f"  Test samples: {len(X_test):,}")
 
-    if is_multi_container:
+    # Collect window and split statistics
+    if collect_statistics:
+        print("\nCollecting window statistics...")
+        window_stats = stats_collector.compute_window_stats(
+            X, y_dict, window_container_ids, vocab, metadata
+        )
+        stats_collector.add_stats("windows", window_stats)
+
+        print("Collecting split statistics...")
+        split_stats = stats_collector.compute_split_stats(
+            X_train,
+            X_val,
+            X_test,
+            y_train_dict,
+            y_val_dict,
+            y_test_dict,
+            container_ids_train,
+            container_ids_val,
+            container_ids_test,
+            vocab,
+        )
+        stats_collector.add_stats("splits", split_stats)
+
+        # Print summary report
+        print(stats_collector.generate_summary_report())
+
+    # Show window examples
+    if collect_statistics:
+        print(
+            generate_window_examples(
+                X, y_dict, window_container_ids, vocab, n_examples=2, feature_names=feature_names
+            )
+        )
+
+    # Generate and show EDA report
+    if show_eda and eda_analyzer:
+        print("\nGenerating exploratory data analysis report...")
+        eda_report = eda_analyzer.generate_eda_report(
+            raw_df=raw_df_for_eda if 'raw_df_for_eda' in locals() else None,
+            processed_df=processed,
+            X=X,
+            y_dict=y_dict,
+            feature_names=feature_names,
+            metric_name=metric_name,
+        )
+        print(eda_report)
+
+    if is_multi_container and not collect_statistics:
+        # Only print if we haven't already shown in statistics
         print("\n  Container distribution in training set:")
         from collections import Counter
 
@@ -294,6 +487,31 @@ def prepare_training_data(
             print(
                 f"    {container_name}: {count} samples ({100*count/len(X_train):.1f}%)"
             )
+
+    # Save to cache if requested
+    if save_cache and cache and data_file:
+        print(f"\n{'='*70}")
+        print("SAVING TO CACHE")
+        print(f"{'='*70}")
+        cache.save(
+            data_file,
+            metric_name,
+            container_names,
+            window_size_minutes,
+            prediction_horizons_minutes,
+            X_train,
+            y_train_dict,
+            X_val,
+            y_val_dict,
+            X_test,
+            y_test_dict,
+            container_ids_train,
+            container_ids_val,
+            container_ids_test,
+            vocab,
+            feature_names,
+            metadata,
+        )
 
     return (
         X_train,
@@ -308,6 +526,8 @@ def prepare_training_data(
         vocab,
         None,
         metadata,
+        stats_collector,
+        feature_names,
     )
 
 
@@ -340,6 +560,20 @@ Examples:
   # Train Prophet for network with custom config
   python scripts/train_local.py --metric network_rx --model-type prophet \\
       --config custom.yaml --data-file data/raw/metrics/container_network_20251224.csv
+
+  # Train with full statistics and exploratory analysis
+  python scripts/train_local.py --metric cpu --show-eda --show-stats \\
+      --data-file data/raw/metrics/container_cpu_rate_20251224_001604.csv
+
+  # Use cached features for faster subsequent runs
+  python scripts/train_local.py --metric cpu --use-cache \\
+      --data-file data/raw/metrics/container_cpu_rate_20251224_001604.csv
+
+  # List cached features
+  python scripts/train_local.py --list-cache
+
+  # Clear old cache
+  python scripts/train_local.py --clear-cache
         """,
     )
 
@@ -413,7 +647,80 @@ Examples:
         "--epochs", type=int, help="Number of training epochs (overrides config)"
     )
 
+    # Caching and analysis options
+    parser.add_argument(
+        "--use-cache",
+        action="store_true",
+        default=True,
+        help="Use cached features if available (default: True)",
+    )
+
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Don't use or save cached features",
+    )
+
+    parser.add_argument(
+        "--clear-cache",
+        action="store_true",
+        help="Clear all cached features and exit",
+    )
+
+    parser.add_argument(
+        "--list-cache",
+        action="store_true",
+        help="List all cached features and exit",
+    )
+
+    parser.add_argument(
+        "--show-stats",
+        action="store_true",
+        default=True,
+        help="Show detailed data statistics (default: True)",
+    )
+
+    parser.add_argument(
+        "--no-stats",
+        action="store_true",
+        help="Don't collect or show data statistics",
+    )
+
+    parser.add_argument(
+        "--show-eda",
+        action="store_true",
+        help="Show exploratory data analysis with visualizations",
+    )
+
+    parser.add_argument(
+        "--save-stats",
+        type=str,
+        help="Save statistics to JSON file (e.g., experiments/stats/cpu_stats.json)",
+    )
+
+    parser.add_argument(
+        "--save-eda-report",
+        type=str,
+        help="Save EDA report to text file (e.g., experiments/reports/cpu_eda.txt)",
+    )
+
     args = parser.parse_args()
+
+    # Handle cache management commands
+    if args.clear_cache or args.list_cache:
+        from src.preprocessing.feature_cache import FeatureCache
+
+        cache = FeatureCache()
+
+        if args.list_cache:
+            cache.print_cache_info()
+
+        if args.clear_cache:
+            print("\nClearing feature cache...")
+            cache.clear_cache()
+            print("Cache cleared successfully!")
+
+        sys.exit(0)
 
     print("=" * 70)
     print(f"Training {args.model_type.upper()} model for {args.metric}")
@@ -472,6 +779,12 @@ Examples:
     if args.epochs:
         config.training.epochs = args.epochs
 
+    # Determine cache and stats settings
+    use_cache = args.use_cache and not args.no_cache
+    save_cache = use_cache  # Save to cache if we're using cache
+    collect_stats = args.show_stats and not args.no_stats
+    show_eda = args.show_eda
+
     # Prepare data with container selection
     # Convert horizons from timesteps to minutes (4 timesteps = 1 minute at 15s intervals)
     prediction_horizons_minutes = [h // 4 for h in config.data.prediction_horizons]
@@ -490,12 +803,18 @@ Examples:
             vocab,
             scalers,
             metadata,
+            stats_collector,
+            feature_names,
         ) = prepare_training_data(
             metric_name=args.metric,
             container_names=selected_containers,
             data_file=args.data_file,
             window_size_minutes=60,
             prediction_horizons_minutes=prediction_horizons_minutes,
+            use_cache=use_cache,
+            save_cache=save_cache,
+            collect_statistics=collect_stats,
+            show_eda=show_eda,
         )
     except Exception as e:
         print(f"\nError preparing data: {e}")
@@ -571,6 +890,25 @@ Examples:
         json.dump(convert_numpy(results), f, indent=2)
 
     print(f"\nResults saved to: {results_file}")
+
+    # Save statistics if requested
+    if args.save_stats and stats_collector:
+        stats_file = args.save_stats
+        stats_collector.save_to_file(stats_file)
+
+    # Save EDA report if requested
+    if args.save_eda_report and show_eda:
+        from src.preprocessing.exploratory_analysis import ExploratoryAnalyzer
+
+        eda_analyzer = ExploratoryAnalyzer()
+        # We don't have raw_df here, but we can generate report from what we have
+        eda_report = eda_analyzer.generate_eda_report(
+            X=X_train,
+            y_dict=y_train_dict,
+            feature_names=feature_names,
+            metric_name=args.metric,
+        )
+        eda_analyzer.save_report(eda_report, args.save_eda_report)
 
     print("\n" + "=" * 70)
     print("Training Complete!")

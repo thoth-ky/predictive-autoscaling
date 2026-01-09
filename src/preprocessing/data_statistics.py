@@ -520,7 +520,12 @@ def generate_window_examples(
         lines.append(f"\nTarget values:")
         for horizon, y in sorted(y_dict.items()):
             horizon_minutes = horizon // 4
-            lines.append(f"  {horizon_minutes}min horizon: {y[idx]:.4f}")
+            target = y[idx]
+            if hasattr(target, '__len__') and len(target) > 1:
+                # It's a sequence - show summary
+                lines.append(f"  {horizon_minutes}min horizon: mean={target.mean():.4f}, min={target.min():.4f}, max={target.max():.4f}")
+            else:
+                lines.append(f"  {horizon_minutes}min horizon: {float(target):.4f}")
 
     lines.append("\n" + "=" * 80)
     return "\n".join(lines)

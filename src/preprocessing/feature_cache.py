@@ -269,9 +269,8 @@ class FeatureCache:
                 metadata_info = json.load(f)
                 print(f"  Created: {metadata_info.get('created_at', 'unknown')}")
                 print(f"  Metric: {metadata_info.get('metric_name', 'unknown')}")
-                print(
-                    f"  Containers: {', '.join(metadata_info.get('container_names', []))}"
-                )
+                container_names = metadata_info.get('container_names', [])
+                print(f"  Containers: {len(container_names)}")
 
         print(f"  Train samples: {len(data_bundle['X_train']):,}")
         print(f"  Val samples: {len(data_bundle['X_val']):,}")
@@ -363,9 +362,8 @@ class FeatureCache:
             print(f"\n{idx}. {item.get('metric_name', 'unknown')}")
             print(f"   Cache key: {item.get('cache_key', 'unknown')}")
             print(f"   Created: {item.get('created_at', 'unknown')}")
-            print(
-                f"   Containers: {', '.join(item.get('container_names', []))}"
-            )
+            container_names = item.get('container_names', [])
+            print(f"   Containers: {len(container_names)}")
             print(
                 f"   Window size: {item.get('window_size_minutes', 0)} minutes"
             )

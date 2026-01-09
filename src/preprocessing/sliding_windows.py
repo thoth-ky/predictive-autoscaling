@@ -71,9 +71,9 @@ class TimeSeriesWindowGenerator:
                 f"got {n_timesteps}"
             )
 
-        # Preallocate arrays
-        X = np.zeros((n_windows, self.window_size, n_features))
-        y = np.zeros((n_windows, self.prediction_horizon, n_features))
+        # Preallocate arrays (float32 for memory efficiency - 50% savings vs float64)
+        X = np.zeros((n_windows, self.window_size, n_features), dtype=np.float32)
+        y = np.zeros((n_windows, self.prediction_horizon, n_features), dtype=np.float32)
 
         window_timestamps = [] if timestamps is not None else None
 
@@ -361,10 +361,7 @@ def create_features_and_windows(
         timestamp_column="timestamp",
     )
 
-    print(f"✅ Created {len(X)} windows")
-    print(f"   Input shape: {X.shape} (samples, timesteps, features)")
-    print(f"   Target shape: {y.shape} (samples, prediction_horizon)")
-    print(f"   Features: {feature_columns}")
+    print(f"✅ Created {len(X)} windows ({X.shape[1]} timesteps, {len(feature_columns)} features)")
 
     return X, y, feature_columns, metadata
 
@@ -428,13 +425,13 @@ class MultiHorizonWindowGenerator:
                 f"{self.window_size + max_horizon} timesteps, got {n_timesteps}"
             )
 
-        # Preallocate input array
-        X = np.zeros((n_windows, self.window_size, n_features))
+        # Preallocate input array (float32 for memory efficiency)
+        X = np.zeros((n_windows, self.window_size, n_features), dtype=np.float32)
 
         # Preallocate target arrays for each horizon
         y_dict = {}
         for horizon in self.prediction_horizons:
-            y_dict[horizon] = np.zeros((n_windows, horizon, n_features))
+            y_dict[horizon] = np.zeros((n_windows, horizon, n_features), dtype=np.float32)
 
         window_timestamps = [] if timestamps is not None else None
 
@@ -523,13 +520,15 @@ class MultiHorizonWindowGenerator:
 
         # Get unique containers
         unique_containers = np.unique(container_ids)
-        print(f"  Creating windows for {len(unique_containers)} containers...")
+        print(f"  Processing {len(unique_containers)} containers...")
 
         # Storage for all windows across containers
         all_X = []
         all_y_dicts = {horizon: [] for horizon in self.prediction_horizons}
         all_window_container_ids = []
         all_window_timestamps = []
+        skipped_containers = []  # Track skipped containers for summary
+        successful_containers = 0
 
         max_horizon = max(self.prediction_horizons)
 
@@ -549,11 +548,7 @@ class MultiHorizonWindowGenerator:
             # Check temporal continuity
             # Container data should be contiguous or have small gaps
             if len(container_indices) < self.window_size + max_horizon:
-                print(
-                    f"  Warning: Container '{container_display}' has only "
-                    f"{len(container_indices)} timesteps, skipping "
-                    f"(need {self.window_size + max_horizon})"
-                )
+                skipped_containers.append(container_display)
                 continue
 
             # Extract data for this container
@@ -586,29 +581,66 @@ class MultiHorizonWindowGenerator:
                         ts_info["container_id"] = container_id
                     all_window_timestamps.extend(timestamps_container)
 
-                print(
-                    f"    Container '{container_display}': {n_windows_container} windows created"
-                )
+                successful_containers += 1
 
             except ValueError as e:
-                print(
-                    f"  Warning: Could not create windows for container '{container_display}': {e}"
-                )
+                skipped_containers.append(f"{container_display} ({e})")
                 continue
 
+        # Print summary of skipped containers
+        if skipped_containers:
+            print(f"  Skipped {len(skipped_containers)} containers (insufficient data)")
+        
         # Check if we created any windows
         if len(all_X) == 0:
             raise ValueError(
                 "No windows could be created. All containers have insufficient data."
             )
 
-        # Concatenate all windows
-        X = np.concatenate(all_X, axis=0)
+        # Memory-efficient incremental concatenation
+        import gc
+        
+        print(f"  Merging windows from {successful_containers} containers...")
+        
+        # Calculate total size for preallocation
+        total_windows = sum(x.shape[0] for x in all_X)
+        n_features = all_X[0].shape[2]
+        
+        # Preallocate final arrays (more memory efficient than multiple concatenates)
+        X = np.empty((total_windows, self.window_size, n_features), dtype=np.float32)
         y_dict = {
-            horizon: np.concatenate(all_y_dicts[horizon], axis=0)
+            horizon: np.empty((total_windows, all_y_dicts[horizon][0].shape[1]), dtype=np.float32)
             for horizon in self.prediction_horizons
         }
-        window_container_ids = np.array(all_window_container_ids)
+        
+        # Copy data incrementally and free source arrays
+        current_idx = 0
+        for i, (x_chunk, container_id) in enumerate(zip(all_X, unique_containers)):
+            n_windows_chunk = x_chunk.shape[0]
+            end_idx = current_idx + n_windows_chunk
+            
+            X[current_idx:end_idx] = x_chunk
+            for horizon in self.prediction_horizons:
+                y_dict[horizon][current_idx:end_idx] = all_y_dicts[horizon][i]
+            
+            current_idx = end_idx
+            
+            # Free memory from source arrays immediately
+            all_X[i] = None
+            for horizon in self.prediction_horizons:
+                all_y_dicts[horizon][i] = None
+            
+            # Periodic garbage collection
+            if (i + 1) % 50 == 0:
+                gc.collect()
+        
+        # Clear the lists
+        del all_X, all_y_dicts
+        gc.collect()
+        
+        window_container_ids = np.array(all_window_container_ids, dtype=np.int32)
+        del all_window_container_ids
+        gc.collect()
 
         print(
             f"  Total windows created: {len(X)} across {len(unique_containers)} containers"
@@ -705,13 +737,8 @@ def create_multi_horizon_features_and_windows(
         data=data_values, timestamps=timestamps
     )
 
-    print(f"✅ Created {len(X)} windows with multiple horizons")
-    print(f"   Input shape: {X.shape} (samples, timesteps, features)")
-    print("   Target horizons:")
-    for h, y in y_dict.items():
-        horizon_minutes = h // 4
-        print(f"     {horizon_minutes} min ({h} steps): {y.shape}")
-    print(f"   Features: {feature_columns}")
+    horizons_str = ', '.join(f"{h//4}min" for h in y_dict.keys())
+    print(f"✅ Created {len(X)} windows ({X.shape[1]} timesteps, {len(feature_columns)} features, horizons: {horizons_str})")
 
     return X, y_dict, feature_columns, metadata
 

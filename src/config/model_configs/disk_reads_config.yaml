@@ -9,8 +9,8 @@ data:
   - 20
   - 60
   - 120
-  processed_data_path: /home/thoth/dpn/predictive-autoscaling/data/processed
-  raw_data_path: /home/thoth/dpn/predictive-autoscaling/data/raw
+  processed_data_path: .//data/processed
+  raw_data_path: .//data/raw
   stride: 4
   test_split: 0.15
   train_split: 0.7
@@ -33,7 +33,7 @@ model:
   prophet_yearly_seasonality: false
 training:
   batch_size: 32
-  checkpoint_dir: /home/thoth/dpn/predictive-autoscaling/experiments/checkpoints
+  checkpoint_dir: .//experiments/checkpoints
   device: cpu
   epochs: 100
   experiment_name: predictive-autoscaling
@@ -50,6 +50,6 @@ training:
   patience: 15
   sagemaker_instance_type: ml.p3.2xlarge
   save_every_n_epochs: 10
-  tracking_uri: sqlite:////home/thoth/dpn/predictive-autoscaling/experiments/mlflow.db
+  tracking_uri: sqlite:///.//experiments/mlflow.db
   use_sagemaker: false
   weight_decay: 0.0
